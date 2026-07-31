@@ -1,0 +1,30 @@
+---
+- name: Check whether this control-plane node already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: secondary_admin_conf
+
+- name: Join this control-plane node
+  ansible.builtin.command: >-
+    {{ hostvars[groups['kube_control_plane'][0]].kubernetes_control_plane_join_command }}
+  register: secondary_control_plane_join
+  changed_when: secondary_control_plane_join.rc == 0
+  no_log: true
+  when: not secondary_admin_conf.stat.exists
+
+- name: Create root kubeconfig directory on this control-plane node
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install root kubeconfig on this control-plane node
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"

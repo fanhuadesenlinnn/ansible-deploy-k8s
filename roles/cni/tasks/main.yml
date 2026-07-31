@@ -1,0 +1,77 @@
+---
+- name: Define the remote CNI manifest path
+  ansible.builtin.set_fact:
+    remote_cni_manifest: /etc/kubernetes/cni-manifest.yaml
+
+- name: Copy a custom CNI manifest from the controller
+  ansible.builtin.copy:
+    src: "{{ cni_manifest_file }}"
+    dest: "{{ remote_cni_manifest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - install_mode == 'online'
+    - cni_manifest_file | length > 0
+
+- name: Download the configured CNI manifest
+  ansible.builtin.get_url:
+    url: "{{ cni_manifest_url }}"
+    dest: "{{ remote_cni_manifest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when:
+    - install_mode == 'online'
+    - cni_manifest_file | length == 0
+
+- name: Copy the CNI manifest from the offline bundle
+  ansible.builtin.copy:
+    src: "{{ offline_remote_dir }}/manifests/{{ offline_cni_manifest }}"
+    dest: "{{ remote_cni_manifest }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: install_mode == 'offline'
+
+- name: Align the Flannel network with the configured pod CIDR
+  ansible.builtin.replace:
+    path: "{{ remote_cni_manifest }}"
+    regexp: 10\.244\.0\.0/16
+    replace: "{{ pod_network_cidr }}"
+  when: cni_plugin == 'flannel'
+
+- name: Apply the CNI manifest
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - apply
+      - --server-side
+      - --force-conflicts
+      - --field-manager=ansible-deploy-k8s
+      - -f
+      - "{{ remote_cni_manifest }}"
+  register: cni_apply_result
+  changed_when: >-
+    'created' in cni_apply_result.stdout or
+    'configured' in cni_apply_result.stdout or
+    'serverside-applied' in cni_apply_result.stdout
+
+- name: Wait for CoreDNS after CNI installation
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --namespace=kube-system
+      - rollout
+      - status
+      - deployment/coredns
+      - --timeout=300s
+  register: coredns_rollout
+  changed_when: false
+  retries: 3
+  delay: 10
+  until: coredns_rollout.rc == 0

@@ -1,0 +1,64 @@
+---
+- name: Validate offline bundle source
+  ansible.builtin.assert:
+    that:
+      - (offline_bundle_path | length > 0) != (offline_bundle_url | length > 0)
+    fail_msg: Set exactly one of offline_bundle_path or offline_bundle_url in offline mode.
+  when: install_mode == 'offline'
+
+- name: Create offline bundle directory
+  ansible.builtin.file:
+    path: "{{ offline_remote_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_mode == 'offline'
+
+- name: Copy offline bundle from the Ansible controller
+  ansible.builtin.copy:
+    src: "{{ offline_bundle_path }}/"
+    dest: "{{ offline_remote_dir }}/"
+    owner: root
+    group: root
+    mode: preserve
+  when:
+    - install_mode == 'offline'
+    - offline_bundle_path | length > 0
+
+- name: Download offline bundle archive
+  ansible.builtin.get_url:
+    url: "{{ offline_bundle_url }}"
+    dest: /tmp/ansible-install-k8s-offline-bundle.tar.gz
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when:
+    - install_mode == 'offline'
+    - offline_bundle_url | length > 0
+
+- name: Extract offline bundle archive
+  ansible.builtin.unarchive:
+    src: /tmp/ansible-install-k8s-offline-bundle.tar.gz
+    dest: "{{ offline_remote_dir }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+  when:
+    - install_mode == 'offline'
+    - offline_bundle_url | length > 0
+
+- name: Inspect offline Debian packages
+  ansible.builtin.find:
+    paths: "{{ offline_remote_dir }}/packages"
+    patterns: "*.deb"
+    file_type: file
+  register: offline_deb_packages
+  when: install_mode == 'offline'
+
+- name: Require Debian packages in offline bundle
+  ansible.builtin.assert:
+    that:
+      - offline_deb_packages.matched | int > 0
+    fail_msg: "The offline bundle must contain packages/*.deb for the target OS and architecture."
+  when: install_mode == 'offline'

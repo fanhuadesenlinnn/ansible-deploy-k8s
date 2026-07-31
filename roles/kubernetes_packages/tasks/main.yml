@@ -1,0 +1,62 @@
+---
+- name: Create Kubernetes apt keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_mode == 'online'
+
+- name: Download Kubernetes repository key
+  ansible.builtin.get_url:
+    url: "{{ kubernetes_apt_key_url }}"
+    dest: /etc/apt/keyrings/kubernetes.asc
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Configure Kubernetes repository
+  ansible.builtin.apt_repository:
+    repo: "{{ kubernetes_apt_repository }}"
+    filename: kubernetes
+    state: present
+    update_cache: true
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Install pinned Kubernetes packages
+  ansible.builtin.apt:
+    name:
+      - "kubeadm={{ kubernetes_package_version }}"
+      - "kubectl={{ kubernetes_package_version }}"
+      - "kubelet={{ kubernetes_package_version }}"
+    state: present
+    update_cache: true
+    allow_downgrade: false
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Verify Kubernetes commands are installed
+  ansible.builtin.command: "{{ item }}"
+  loop:
+    - kubeadm version -o short
+    - kubelet --version
+    - kubectl version --client
+  changed_when: false
+
+- name: Hold Kubernetes package versions
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubectl
+    - kubelet
+
+- name: Enable kubelet
+  ansible.builtin.service:
+    name: kubelet
+    enabled: true

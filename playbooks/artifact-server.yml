@@ -1,0 +1,7 @@
+---
+- name: Start an optional dufs artifact server
+  hosts: "kube_control_plane[0]"
+  become: true
+  gather_facts: true
+  roles:
+    - artifact_server_dufs

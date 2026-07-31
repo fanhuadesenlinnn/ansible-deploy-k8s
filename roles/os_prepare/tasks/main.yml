@@ -1,0 +1,68 @@
+---
+- name: Install base operating-system packages in online mode
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - conntrack
+      - curl
+      - gpg
+      - iptables
+      - socat
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Install all packages from the offline bundle  # noqa command-instead-of-module
+  ansible.builtin.shell:
+    cmd: >-
+      apt-get install -y
+      {{ offline_deb_packages.files | map(attribute='path') | map('quote') | join(' ') }}
+  args:
+    executable: /bin/bash
+  environment: "{{ proxy_env }}"
+  register: offline_apt_install
+  changed_when: "'Setting up' in offline_apt_install.stdout or 'Unpacking' in offline_apt_install.stdout"
+  when: install_mode == 'offline'
+
+- name: Disable active swap
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0
+  changed_when: true
+
+- name: Disable swap entries in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(?!#)(.*\s+swap\s+.*)$'
+    replace: '# disabled by ansible-deploy-k8s: \1'
+    backup: true
+
+- name: Persist required kernel modules
+  ansible.builtin.template:
+    src: kubernetes.conf.j2
+    dest: /etc/modules-load.d/kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Configure Kubernetes sysctl settings
+  ansible.builtin.template:
+    src: 99-kubernetes-cri.conf.j2
+    dest: /etc/sysctl.d/99-kubernetes-cri.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl settings
+
+- name: Apply pending operating-system handlers
+  ansible.builtin.meta: flush_handlers

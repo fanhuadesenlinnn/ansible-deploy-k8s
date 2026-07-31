@@ -1,0 +1,73 @@
+---
+- name: Create apt keyring directory for CRI-O
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_mode == 'online'
+
+- name: Download CRI-O repository key
+  ansible.builtin.get_url:
+    url: "{{ crio_apt_key_url }}"
+    dest: /etc/apt/keyrings/cri-o.asc
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Configure CRI-O repository
+  ansible.builtin.apt_repository:
+    repo: "{{ crio_apt_repository }}"
+    filename: cri-o
+    state: present
+    update_cache: true
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Install CRI-O in online mode
+  ansible.builtin.apt:
+    name: cri-o
+    state: present
+    update_cache: true
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Verify CRI-O is installed
+  ansible.builtin.command: crio --version
+  register: crio_version_result
+  changed_when: false
+
+- name: Enable and start CRI-O
+  ansible.builtin.service:
+    name: crio
+    state: started
+    enabled: true
+
+- name: Discover offline CRI-O images
+  ansible.builtin.find:
+    paths: "{{ offline_remote_dir }}/images"
+    patterns: "*.tar"
+    file_type: file
+  register: offline_crio_image_archives
+  when: install_mode == 'offline'
+
+- name: Verify podman is available for offline CRI-O image import
+  ansible.builtin.command: podman --version
+  changed_when: false
+  when:
+    - install_mode == 'offline'
+    - offline_crio_image_archives.matched | default(0) | int > 0
+
+- name: Import offline images for CRI-O
+  ansible.builtin.command:
+    argv:
+      - podman
+      - load
+      - --input
+      - "{{ item.path }}"
+  loop: "{{ offline_crio_image_archives.files | default([]) }}"
+  register: crio_image_import
+  changed_when: "'Loaded image' in crio_image_import.stdout"

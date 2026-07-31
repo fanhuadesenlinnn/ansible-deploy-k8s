@@ -1,0 +1,99 @@
+---
+- name: Resolve the advertised control-plane host
+  ansible.builtin.set_fact:
+    resolved_control_plane_host: >-
+      {{ control_plane_endpoint.rsplit(':', 1)[0]
+         if control_plane_endpoint | length > 0
+         else ansible_host | default(ansible_default_ipv4.address) }}
+
+- name: Resolve the complete control-plane endpoint
+  ansible.builtin.set_fact:
+    resolved_control_plane_endpoint: >-
+      {{ control_plane_endpoint
+         if control_plane_endpoint | length > 0
+         else resolved_control_plane_host ~ ':' ~ (api_server_bind_port | string) }}
+
+- name: Create kubeadm configuration directory
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render kubeadm initialization configuration
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: /etc/kubernetes/kubeadm-init.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Check whether the control plane is initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubernetes_admin_conf
+
+- name: Initialize the Kubernetes control plane
+  ansible.builtin.command:
+    argv: "{{ ['kubeadm', 'init', '--config', '/etc/kubernetes/kubeadm-init.yaml'] + kubeadm_extra_args }}"
+  environment: "{{ proxy_env }}"
+  register: kubeadm_init_result
+  changed_when: kubeadm_init_result.rc == 0
+  when: not kubernetes_admin_conf.stat.exists
+
+- name: Create root kubeconfig directory
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install root kubeconfig
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Wait for the Kubernetes API
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - get
+      - --raw=/readyz
+  register: kubernetes_api_ready
+  changed_when: false
+  retries: 30
+  delay: 5
+  until: kubernetes_api_ready.rc == 0
+
+- name: Generate a current worker join command
+  ansible.builtin.command: kubeadm token create --print-join-command
+  register: kubeadm_worker_join
+  changed_when: false
+
+- name: Publish the worker join command for later plays
+  ansible.builtin.set_fact:
+    kubernetes_worker_join_command: >-
+      {{ kubeadm_worker_join.stdout }} --cri-socket {{ kubernetes_cri_socket }}
+  no_log: true
+
+- name: Upload control-plane certificates
+  ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+  register: kubeadm_upload_certs
+  changed_when: true
+  when: groups['kube_control_plane'] | length > 1
+
+- name: Publish the additional control-plane join command
+  ansible.builtin.set_fact:
+    kubernetes_control_plane_join_command: >-
+      {{ kubeadm_worker_join.stdout }} --control-plane
+      --certificate-key {{ kubeadm_upload_certs.stdout_lines[-1] }}
+      --cri-socket {{ kubernetes_cri_socket }}
+  no_log: true
+  when: groups['kube_control_plane'] | length > 1

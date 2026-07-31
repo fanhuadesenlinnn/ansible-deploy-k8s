@@ -1,0 +1,19 @@
+---
+- name: Check whether this worker already joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: worker_kubelet_conf
+
+- name: Join this worker to the cluster
+  ansible.builtin.command: >-
+    {{ hostvars[groups['kube_control_plane'][0]].kubernetes_worker_join_command }}
+  register: worker_join_result
+  changed_when: worker_join_result.rc == 0
+  no_log: true
+  when: not worker_kubelet_conf.stat.exists
+
+- name: Ensure kubelet is running
+  ansible.builtin.service:
+    name: kubelet
+    state: started
+    enabled: true

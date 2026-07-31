@@ -1,0 +1,34 @@
+---
+- name: Configure containerd runtime
+  ansible.builtin.include_tasks: containerd.yml
+  when: container_runtime == 'containerd'
+
+- name: Configure CRI-O runtime
+  ansible.builtin.include_tasks: crio.yml
+  when: container_runtime == 'crio'
+
+- name: Create container runtime systemd override directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ container_runtime_service }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: proxy_env | length > 0
+
+- name: Configure the container runtime proxy environment
+  ansible.builtin.template:
+    src: proxy.conf.j2
+    dest: "/etc/systemd/system/{{ container_runtime_service }}.service.d/proxy.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: "{{ 'Restart containerd' if container_runtime == 'containerd' else 'Restart CRI-O' }}"
+  when: proxy_env | length > 0
+
+- name: Remove an obsolete container runtime proxy override
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ container_runtime_service }}.service.d/proxy.conf"
+    state: absent
+  notify: "{{ 'Restart containerd' if container_runtime == 'containerd' else 'Restart CRI-O' }}"
+  when: proxy_env | length == 0

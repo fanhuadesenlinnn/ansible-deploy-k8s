@@ -1,0 +1,30 @@
+---
+- name: Create local kubeconfig output directory
+  ansible.builtin.file:
+    path: "{{ kubeconfig_output_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Fetch administrator kubeconfig
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ kubeconfig_output_file }}"
+    flat: true
+
+- name: Restrict local kubeconfig permissions
+  ansible.builtin.file:
+    path: "{{ kubeconfig_output_file }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+
+- name: Override the exported API server when requested
+  ansible.builtin.replace:
+    path: "{{ kubeconfig_output_file }}"
+    regexp: '^\s*server:\s+.*$'
+    replace: "    server: {{ kubeconfig_server }}"
+  delegate_to: localhost
+  become: false
+  when: kubeconfig_server | length > 0

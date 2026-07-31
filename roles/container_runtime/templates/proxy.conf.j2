@@ -1,0 +1,4 @@
+[Service]
+{% for proxy_variable in proxy_env | dict2items %}
+Environment={{ (proxy_variable.key ~ '=' ~ proxy_variable.value) | to_json }}
+{% endfor %}

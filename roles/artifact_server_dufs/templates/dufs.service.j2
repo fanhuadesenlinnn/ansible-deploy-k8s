@@ -1,0 +1,18 @@
+[Unit]
+Description=Read-only Kubernetes artifact server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dufs --bind {{ dufs_bind }} --port {{ dufs_port }} {{ dufs_root }}
+DynamicUser=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

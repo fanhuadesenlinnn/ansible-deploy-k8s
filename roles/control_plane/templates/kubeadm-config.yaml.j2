@@ -1,0 +1,37 @@
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "{{ kubernetes_advertise_address | default(ansible_default_ipv4.address) }}"
+  bindPort: {{ api_server_bind_port }}
+nodeRegistration:
+  criSocket: "{{ kubernetes_cri_socket }}"
+  name: "{{ ansible_hostname }}"
+  kubeletExtraArgs:
+    - name: max-pods
+      value: "{{ kubelet_max_pods }}"
+{% if kubelet_node_ip | length > 0 %}
+    - name: node-ip
+      value: "{{ kubelet_node_ip }}"
+{% endif %}
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: "{{ cluster_name }}"
+kubernetesVersion: "v{{ kubernetes_version }}"
+imageRepository: "{{ kubernetes_image_repository }}"
+controlPlaneEndpoint: "{{ resolved_control_plane_endpoint }}"
+networking:
+  dnsDomain: "{{ cluster_dns_domain }}"
+  podSubnet: "{{ pod_network_cidr }}"
+  serviceSubnet: "{{ service_cidr }}"
+apiServer:
+  certSANs:
+{% for san in ([resolved_control_plane_host] + api_server_cert_sans) | unique %}
+    - "{{ san }}"
+{% endfor %}
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+maxPods: {{ kubelet_max_pods }}

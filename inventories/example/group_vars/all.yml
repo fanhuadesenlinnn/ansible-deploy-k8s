@@ -1,0 +1,92 @@
+---
+# Cluster identity and Kubernetes packages.
+cluster_name: demo
+kubernetes_version: "1.36.3"
+kubernetes_version_minor: "v1.36"
+kubernetes_package_version: "{{ kubernetes_version }}-1.1"
+kubernetes_apt_repository: >-
+  deb [signed-by=/etc/apt/keyrings/kubernetes.asc]
+  https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version_minor }}/deb/ /
+kubernetes_apt_key_url: >-
+  https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version_minor }}/deb/Release.key
+kubernetes_image_repository: registry.k8s.io
+
+# Runtime: containerd or crio.
+container_runtime: containerd
+container_runtime_service: "{{ 'containerd' if container_runtime == 'containerd' else 'crio' }}"
+containerd_package: containerd
+kubernetes_cri_socket: >-
+  {{ 'unix:///run/containerd/containerd.sock'
+     if container_runtime == 'containerd'
+     else 'unix:///var/run/crio/crio.sock' }}
+crio_version_minor: "{{ kubernetes_version_minor }}"
+crio_apt_repository: >-
+  deb [signed-by=/etc/apt/keyrings/cri-o.asc]
+  https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version_minor }}/deb/ /
+crio_apt_key_url: >-
+  https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version_minor }}/deb/Release.key
+
+# Kubernetes networking.
+pod_network_cidr: 10.244.0.0/16
+service_cidr: 10.96.0.0/16
+cluster_dns_domain: cluster.local
+
+# Empty means "first control-plane address:6443". For multiple control-plane
+# nodes, set this to a stable load-balancer/VIP endpoint, for example k8s.example:6443.
+control_plane_endpoint: ""
+api_server_bind_port: 6443
+api_server_cert_sans: []
+
+# CNI is installed separately from kubeadm. Set a custom URL or controller-side
+# file to use another CNI implementation.
+cni_plugin: flannel
+cni_manifest_url: >-
+  https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
+cni_manifest_file: ""
+offline_cni_manifest: kube-flannel.yml
+
+# Installation transport.
+install_mode: online  # online or offline
+offline_bundle_path: ""
+offline_bundle_url: ""
+offline_remote_dir: /opt/ansible-install-k8s/offline
+
+# Optional HTTP proxy environment passed to package/download tasks.
+proxy_env: {}
+
+# Optional containerd registry endpoints. Example:
+# registry_mirrors:
+#   registry.example.com:
+#     endpoint: https://registry.example.com
+#     skip_verify: false
+registry_mirrors: {}
+
+# kubelet and kubeadm customization.
+kubelet_max_pods: 110
+kubeadm_extra_args: []
+kubelet_node_ip: ""
+
+# Where the controller stores the fetched administrator kubeconfig.
+kubeconfig_output_dir: "{{ playbook_dir }}/../artifacts"
+kubeconfig_output_file: "{{ kubeconfig_output_dir }}/{{ cluster_name }}.conf"
+kubeconfig_server: ""
+
+# Optional cluster add-ons. Each URL can be replaced with an internal mirror.
+addons:
+  metrics_server: false
+  cert_manager: false
+  reloader: false
+  istio: false
+addon_manifests:
+  metrics_server: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+  cert_manager: https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+  reloader: https://raw.githubusercontent.com/stakater/Reloader/master/deployments/kubernetes/reloader.yaml
+  istio: ""
+
+# Optional dufs artifact server. It is not required by site.yml.
+dufs_version: v0.46.0
+dufs_port: 666
+dufs_root: "{{ offline_remote_dir }}"
+dufs_download_url: >-
+  {{ 'https://github.com/sigoden/dufs/releases/download/' ~ dufs_version
+     ~ '/dufs-' ~ dufs_version ~ '-' ~ dufs_arch ~ '-unknown-linux-musl.tar.gz' }}

@@ -1,0 +1,8 @@
+---
+profile: basic
+exclude_paths:
+  - files/offline-bundle/
+  - .venv/
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]

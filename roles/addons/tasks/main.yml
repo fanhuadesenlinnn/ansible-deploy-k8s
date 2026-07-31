@@ -1,0 +1,66 @@
+---
+- name: Build the enabled add-on list
+  ansible.builtin.set_fact:
+    enabled_addons: >-
+      {{ addons | dict2items | selectattr('value', 'equalto', true)
+         | map(attribute='key') | list }}
+
+- name: Validate enabled add-on manifests
+  ansible.builtin.assert:
+    that:
+      - addon_manifests[item] | default('') | length > 0 or install_mode == 'offline'
+    fail_msg: "Set addon_manifests.{{ item }} before enabling this add-on."
+  loop: "{{ enabled_addons }}"
+
+- name: Create the remote add-on manifest directory
+  ansible.builtin.file:
+    path: /etc/kubernetes/addons
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download enabled add-on manifests
+  ansible.builtin.get_url:
+    url: "{{ addon_manifests[item] }}"
+    dest: "/etc/kubernetes/addons/{{ item }}.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  loop: "{{ enabled_addons }}"
+  when: install_mode == 'online'
+
+- name: Copy enabled add-on manifests from the offline bundle
+  ansible.builtin.copy:
+    src: "{{ offline_remote_dir }}/manifests/{{ item }}.yaml"
+    dest: "/etc/kubernetes/addons/{{ item }}.yaml"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ enabled_addons }}"
+  when: install_mode == 'offline'
+
+- name: Apply enabled add-ons
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - apply
+      - --server-side
+      - --force-conflicts
+      - --field-manager=ansible-deploy-k8s
+      - -f
+      - "/etc/kubernetes/addons/{{ item }}.yaml"
+  loop: "{{ enabled_addons }}"
+  register: addon_apply_result
+  changed_when: >-
+    'created' in addon_apply_result.stdout or
+    'configured' in addon_apply_result.stdout or
+    'serverside-applied' in addon_apply_result.stdout
+
+- name: Report when no add-ons are enabled
+  ansible.builtin.debug:
+    msg: No optional add-ons are enabled.
+  when: enabled_addons | length == 0

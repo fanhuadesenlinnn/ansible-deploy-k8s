@@ -1,0 +1,5 @@
+server = "{{ item.value.endpoint }}"
+
+[host."{{ item.value.endpoint }}"]
+  capabilities = ["pull", "resolve", "push"]
+  skip_verify = {{ item.value.skip_verify | default(false) | lower }}

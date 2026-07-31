@@ -1,0 +1,27 @@
+---
+name: lint
+
+"on":
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: ansible-galaxy collection install -r requirements.yml
+      - run: yamllint .
+      - run: ansible-lint
+      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/site.yml --syntax-check
+      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/addons.yml --syntax-check
+      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/reset.yml --syntax-check

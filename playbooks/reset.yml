@@ -1,0 +1,43 @@
+---
+- name: Reset Kubernetes hosts
+  hosts: k8s_cluster
+  become: true
+  gather_facts: false
+  vars:
+    kubernetes_reset_confirm: false
+  tasks:
+    - name: Require explicit destructive-operation confirmation
+      ansible.builtin.assert:
+        that:
+          - kubernetes_reset_confirm | bool
+        fail_msg: >-
+          Reset is destructive. Run again with -e kubernetes_reset_confirm=true
+          after verifying the selected inventory and hosts.
+
+    - name: Reset kubeadm state
+      ansible.builtin.command:
+        argv:
+          - kubeadm
+          - reset
+          - --force
+      register: kubeadm_reset_result
+      changed_when: kubeadm_reset_result.rc == 0
+
+    - name: Remove CNI configuration
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/cni/net.d
+        - /var/lib/cni
+        - /var/lib/kubelet/pki
+
+    - name: Remove Kubernetes configuration
+      ansible.builtin.file:
+        path: /etc/kubernetes
+        state: absent
+
+    - name: Restart the container runtime
+      ansible.builtin.service:
+        name: "{{ container_runtime_service }}"
+        state: restarted

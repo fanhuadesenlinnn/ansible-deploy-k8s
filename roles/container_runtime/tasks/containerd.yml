@@ -1,0 +1,108 @@
+---
+- name: Install containerd in online mode
+  ansible.builtin.apt:
+    name: "{{ containerd_package }}"
+    state: present
+    update_cache: true
+  environment: "{{ proxy_env }}"
+  when: install_mode == 'online'
+
+- name: Verify containerd is installed
+  ansible.builtin.command: containerd --version
+  register: containerd_version_result
+  changed_when: false
+
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check for an existing containerd configuration
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config
+
+- name: Generate containerd default configuration
+  ansible.builtin.command: containerd config default
+  register: containerd_default_config
+  changed_when: false
+  when: not containerd_config.stat.exists
+
+- name: Install containerd default configuration
+  ansible.builtin.copy:
+    content: "{{ containerd_default_config.stdout }}\n"
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart containerd
+  when: not containerd_config.stat.exists
+
+- name: Use the systemd cgroup driver in containerd
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup\s*=\s*false'
+    replace: 'SystemdCgroup = true'
+  notify: Restart containerd
+
+- name: Enable containerd registry host configuration
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'config_path\s*=\s*""'
+    replace: 'config_path = "/etc/containerd/certs.d"'
+  notify: Restart containerd
+  when: registry_mirrors | length > 0
+
+- name: Create containerd registry configuration directories
+  ansible.builtin.file:
+    path: "/etc/containerd/certs.d/{{ item.key }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ registry_mirrors | dict2items }}"
+  when: registry_mirrors | length > 0
+
+- name: Configure containerd registry endpoints
+  ansible.builtin.template:
+    src: hosts.toml.j2
+    dest: "/etc/containerd/certs.d/{{ item.key }}/hosts.toml"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ registry_mirrors | dict2items }}"
+  notify: Restart containerd
+  when: registry_mirrors | length > 0
+
+- name: Enable and start containerd
+  ansible.builtin.service:
+    name: containerd
+    state: started
+    enabled: true
+
+- name: Apply pending containerd handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Discover offline container images
+  ansible.builtin.find:
+    paths: "{{ offline_remote_dir }}/images"
+    patterns: "*.tar"
+    file_type: file
+  register: offline_image_archives
+  when: install_mode == 'offline'
+
+- name: Import offline images into containerd
+  ansible.builtin.command:
+    argv:
+      - ctr
+      - --namespace
+      - k8s.io
+      - images
+      - import
+      - "{{ item.path }}"
+  loop: "{{ offline_image_archives.files | default([]) }}"
+  register: containerd_image_import
+  changed_when: "'unpacking' in containerd_image_import.stdout or 'done' in containerd_image_import.stdout"
