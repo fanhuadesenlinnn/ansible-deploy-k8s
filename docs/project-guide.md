@@ -34,6 +34,7 @@
 | `roles/worker/` | 将工作节点加入集群。 |
 | `roles/kubeconfig/` | 将管理员 kubeconfig 导出到控制端。 |
 | `roles/addons/` | 管理可选 Kubernetes 组件。 |
+| `docker/` | 无需在宿主机安装 Python/Ansible 的容器化控制端环境。 |
 | `files/offline-bundle/` | 离线包目录结构占位符。 |
 | `scripts/` | 本地和 CI 共用的检查脚本。 |
 | `.github/` | GitHub Actions 和依赖更新配置。 |

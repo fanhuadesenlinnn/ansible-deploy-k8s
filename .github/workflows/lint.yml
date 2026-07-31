@@ -40,3 +40,11 @@ jobs:
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/reset.yml --syntax-check
       - name: 检查制品服务器 Playbook 语法
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/artifact-server.yml --syntax-check
+      - name: 检查 Docker 脚本语法
+        run: bash -n docker/entrypoint.sh docker/run.sh
+      - name: 检查 Docker Compose 配置
+        run: docker compose -f docker/compose.yml config --quiet
+      - name: 构建容器化 Ansible 控制端
+        run: docker compose -f docker/compose.yml build ansible
+      - name: 验证容器内 Ansible 环境
+        run: docker compose -f docker/compose.yml run --rm -T ansible ansible --version

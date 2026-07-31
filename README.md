@@ -80,6 +80,22 @@ export KUBECONFIG="$PWD/artifacts/<cluster-name>.conf"
 kubectl get nodes -o wide
 ```
 
+## 使用 Docker 运行
+
+本机只安装 Docker 和 Compose 插件时，可以使用项目提供的容器化 Ansible 控制端：
+
+```bash
+cp docker/.env.example docker/.env
+$EDITOR docker/.env
+./docker/run.sh ansible --version
+./docker/run.sh \
+  ansible-playbook \
+  -i inventories/my-cluster/hosts.yml \
+  playbooks/site.yml
+```
+
+SSH 凭据、离线文件路径和安全设置请参阅 [Docker 使用说明](docker/README.md)。
+
 ## 常用操作
 
 ### 安装可选组件
@@ -113,6 +129,7 @@ sudo crictl logs <容器 ID>
 - [项目结构与执行流程](docs/project-guide.md)
 - [离线安装说明](docs/offline-installation.md)
 - [运维、排查与重置](docs/operations.md)
+- [使用 Docker 运行](docker/README.md)
 - [安全策略](SECURITY.md)
 
 ## 开发检查
