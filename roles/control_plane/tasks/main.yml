@@ -1,4 +1,8 @@
 ---
+# 控制平面 Role 的调度入口。
+# kube_control_plane 组中的第一台主机执行 init.yml，其他主机执行 join.yml；site.yml 的 serial=1
+# 确保它们按顺序运行。第一台主机还负责生成后续控制平面和工作节点使用的临时加入命令。
+
 - name: 确定主控制平面节点
   ansible.builtin.set_fact:
     kubernetes_primary_control_plane: "{{ groups['kube_control_plane'][0] }}"

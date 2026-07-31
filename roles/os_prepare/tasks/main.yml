@@ -1,4 +1,8 @@
 ---
+# 操作系统准备 Role：让目标主机满足 kubelet 和容器网络的基础要求。
+# 在线模式通过 apt 安装基础工具；离线模式只安装 offline_remote_dir/packages 中已有的 deb，禁止补下载。
+# 主要输出：Swap 关闭、overlay/br_netfilter 模块持久化、转发和桥接流量 sysctl 生效。
+
 - name: 在在线模式下安装操作系统基础软件包
   ansible.builtin.apt:
     name:
@@ -29,6 +33,7 @@
   changed_when: "'Setting up' in offline_apt_install.stdout or 'Unpacking' in offline_apt_install.stdout"
   when: install_mode == 'offline'
 
+# kubelet 默认要求关闭 Swap。swapoff 处理当前状态，下面的 fstab 修改保证重启后仍然关闭。
 - name: 禁用当前 Swap
   ansible.builtin.command: swapoff -a
   when: ansible_swaptotal_mb | int > 0
@@ -41,6 +46,7 @@
     replace: '# disabled by ansible-deploy-k8s: \1'
     backup: true
 
+# modules-load.d 负责重启后自动加载；modprobe 负责让本次运行立即生效。
 - name: 持久化所需的内核模块
   ansible.builtin.template:
     src: kubernetes.conf.j2
@@ -66,5 +72,6 @@
     mode: "0644"
   notify: 应用 sysctl 参数
 
+# 在安装容器运行时前立即应用 sysctl，而不是等到整个 Play 结束后再执行 Handler。
 - name: 执行待处理的操作系统 Handler
   ansible.builtin.meta: flush_handlers

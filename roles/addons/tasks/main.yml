@@ -1,4 +1,8 @@
 ---
+# 附加组件 Role：读取 addons 字典，只处理值为 true 的组件。
+# 在线模式下载带校验和的清单，离线模式读取 manifests/<组件名>.yaml，然后使用 Server-Side Apply。
+# 它独立于主安装流程，适合在集群建成后单独运行 playbooks/addons.yml。
+
 - name: 生成已启用的附加组件列表
   ansible.builtin.set_fact:
     enabled_addons: >-
@@ -48,6 +52,7 @@
   loop: "{{ enabled_addons }}"
   when: install_mode == 'offline'
 
+# 与 CNI 相同，kubectl diff 的返回码 1 表示有差异，不应当作任务失败。
 - name: 检查已启用的附加组件是否会改变集群
   ansible.builtin.command:
     argv:

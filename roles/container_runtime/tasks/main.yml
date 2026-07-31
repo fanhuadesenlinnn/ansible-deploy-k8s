@@ -1,4 +1,7 @@
 ---
+# 容器运行时 Role 的统一入口。container_runtime 决定包含 containerd.yml 还是 crio.yml。
+# 两种运行时共用代理 systemd Drop-In；proxy_env 为空时会删除旧配置，避免代理被意外保留。
+
 - name: 配置 containerd 运行时
   ansible.builtin.include_tasks: containerd.yml
   when: container_runtime == 'containerd'
@@ -7,6 +10,7 @@
   ansible.builtin.include_tasks: crio.yml
   when: container_runtime == 'crio'
 
+# systemd Drop-In 位于 /etc/systemd/system/<服务>.service.d/，不会覆盖软件包自带的 Unit 文件。
 - name: 创建容器运行时 systemd 覆盖配置目录
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ container_runtime_service }}.service.d"

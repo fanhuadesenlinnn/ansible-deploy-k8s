@@ -1,4 +1,8 @@
 ---
+# dufs Role：在第一台控制平面节点提供只读 HTTP 文件服务，便于其他节点下载离线归档。
+# 在线模式下载固定版本静态二进制，离线模式要求 offline_remote_dir/bin/dufs 已存在。
+# 服务监听地址、端口和共享目录由 defaults/main.yml 或 Inventory 覆盖。
+
 - name: 将主机架构映射为 dufs 发布架构
   ansible.builtin.set_fact:
     dufs_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'aarch64'}[ansible_architecture] }}"

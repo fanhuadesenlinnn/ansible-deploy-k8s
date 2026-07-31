@@ -1,4 +1,7 @@
 ---
+# 危险：此 Playbook 会从 Inventory 选中的所有 Kubernetes 主机删除集群状态。
+# 它与 site.yml 完全分离，并要求同时提供布尔确认和准确的 cluster_name，降低误操作风险。
+# kubeadm reset 不清理 iptables、nftables 或 IPVS 规则，如需还原裸机状态还要手工处理这些规则。
 - name: 重置 Kubernetes 主机
   hosts: k8s_cluster
   become: true
@@ -18,6 +21,7 @@
           -e kubernetes_reset_cluster_name={{ cluster_name }}.
         success_msg: 已确认重置目标和破坏性操作。
 
+    # kubeadm reset 使用与安装时相同的 CRI Socket，确保能正确停止并清理容器运行时中的 Pod。
     - name: 重置 kubeadm 状态
       ansible.builtin.command:
         argv:
@@ -29,6 +33,7 @@
       register: kubeadm_reset_result
       changed_when: kubeadm_reset_result.rc == 0
 
+    # kubeadm 不会完整删除 CNI 状态，因此显式移除网络配置和 kubelet 证书目录。
     - name: 删除 CNI 配置
       ansible.builtin.file:
         path: "{{ item }}"
@@ -53,6 +58,7 @@
         name: "{{ container_runtime_service }}"
         state: restarted
 
+    # 此任务通过 delegate_to 在 Ansible 控制端执行，而不是在目标 Kubernetes 节点执行。
     - name: 删除已导出的管理员 kubeconfig
       ansible.builtin.file:
         path: "{{ kubeconfig_output_file }}"

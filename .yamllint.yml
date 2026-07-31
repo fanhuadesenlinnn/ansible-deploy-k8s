@@ -1,11 +1,14 @@
 ---
+# 在 yamllint 默认规则上做少量项目级调整；CI 和 just check 都会读取本文件。
 extends: default
 ignore: |
   .venv/
 rules:
+  # 过长行先作为警告，避免 URL、校验和或 Jinja 表达式被强行拆分后难以阅读。
   line-length:
     max: 120
     level: warning
+  # YAML 布尔值统一写为 true/false，避免 yes/no 在不同解析器中的歧义。
   truthy:
     allowed-values: ["true", "false"]
   comments:
@@ -13,6 +16,7 @@ rules:
   comments-indentation: false
   braces:
     max-spaces-inside: 1
+  # 文件权限必须使用引号，例如 "0644"，防止 YAML 将其当作八进制数字。
   octal-values:
     forbid-implicit-octal: true
     forbid-explicit-octal: true

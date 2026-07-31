@@ -1,4 +1,8 @@
 ---
+# crictl Role：在每个节点安装固定版本的 CRI 排查客户端，并生成指向当前容器运行时的配置。
+# 在线模式下载并校验官方静态归档；离线模式复制 offline_remote_dir/bin/crictl。
+# 最后同时验证二进制版本和 CRI 连通性，因此 Socket 或运行时服务异常会在 kubeadm 前暴露。
+
 - name: 将主机架构映射为 crictl 发布架构
   ansible.builtin.set_fact:
     crictl_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
@@ -28,6 +32,7 @@
     group: root
     mode: "0755"
 
+# 先读取现有版本，使在线安装保持幂等：版本匹配时不重复下载和解压。
 - name: 检查已安装的 crictl 版本
   ansible.builtin.command:
     argv:
@@ -70,6 +75,7 @@
     - install_mode == 'online'
     - crictl_needs_install | bool
 
+# 离线文件已经由 artifact_bundle 校验存在；每次复制可确保权限和目标内容正确。
 - name: 从离线包安装 crictl
   ansible.builtin.copy:
     src: "{{ offline_remote_dir }}/bin/crictl"
@@ -104,6 +110,7 @@
       已安装的 crictl 与 crictl_version={{ crictl_version }} 不一致。
     success_msg: 已安装指定版本的 crictl。
 
+# 使用显式 --config，避免受到目标主机上其他 crictl 配置文件或环境变量影响。
 - name: 验证 crictl 可以连接容器运行时
   ansible.builtin.command:
     argv:

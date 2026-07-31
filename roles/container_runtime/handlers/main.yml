@@ -1,4 +1,5 @@
 ---
+# 配置文件或代理 Drop-In 发生变化时重启对应运行时，并通过 daemon_reload 重新读取 systemd Unit。
 - name: 重启 containerd
   ansible.builtin.systemd_service:
     name: containerd

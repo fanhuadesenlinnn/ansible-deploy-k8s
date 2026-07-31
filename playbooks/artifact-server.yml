@@ -1,4 +1,6 @@
 ---
+# 可选的离线制品服务器入口。它在第一台控制平面主机上安装只读 dufs HTTP 服务。
+# Kubernetes 安装并不依赖此 Playbook；也可以使用现有 Nginx、MinIO 或其他 HTTP 服务托管离线归档。
 - name: 启动可选的 dufs 制品服务器
   hosts: "kube_control_plane[0]"
   become: true

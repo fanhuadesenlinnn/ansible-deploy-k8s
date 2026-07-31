@@ -1,11 +1,14 @@
 [Unit]
 Description=只读 Kubernetes 制品服务器
+# 等待网络在线后再启动，确保其他节点可以访问监听地址。
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
+# dufs 默认只提供下载，不在命令行中启用上传、删除或 WebDAV 写入能力。
 ExecStart=/usr/local/bin/dufs --bind {{ dufs_bind }} --port {{ dufs_port }} {{ dufs_root }}
+# 使用动态低权限用户并限制文件系统访问，降低辅助 HTTP 服务的权限范围。
 DynamicUser=true
 ProtectSystem=strict
 ProtectHome=true

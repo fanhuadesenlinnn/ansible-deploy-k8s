@@ -1,4 +1,5 @@
 ---
+# Handler 只在 sysctl 模板发生变化时执行；flush_handlers 可在任务中提前触发它。
 - name: 应用 sysctl 参数
   ansible.builtin.command: sysctl --system
   changed_when: true

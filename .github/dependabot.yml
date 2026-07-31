@@ -1,4 +1,5 @@
 ---
+# Dependabot 每周检查 GitHub Actions 和 Python 依赖更新，并以 PR 形式提交建议。
 version: 2
 updates:
   - package-ecosystem: github-actions

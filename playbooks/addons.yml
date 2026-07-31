@@ -1,4 +1,6 @@
 ---
+# 可选附加组件的独立入口。先在 group_vars 的 addons 中启用组件，再运行本 Playbook。
+# 它不会被 site.yml 自动调用，便于在集群安装完成后独立维护附加组件版本。
 - name: 安装可选的 Kubernetes 附加组件
   hosts: "kube_control_plane[0]"
   become: true

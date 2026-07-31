@@ -1,4 +1,8 @@
 ---
+# 第一台控制平面节点的初始化流程。
+# 输出包括 /etc/kubernetes/admin.conf、root kubeconfig，以及保存在 hostvars 中的两类临时 join 命令。
+# join 命令和证书密钥属于敏感信息，相关任务使用 no_log，日志中不会显示其内容。
+
 - name: 解析对外发布的控制平面主机
   ansible.builtin.set_fact:
     resolved_control_plane_host: >-
@@ -6,6 +10,8 @@
          if control_plane_endpoint | length > 0
          else ansible_host | default(ansible_default_ipv4.address) }}
 
+# 用户未提供 control_plane_endpoint 时使用当前主机地址，并自动补上 api_server_bind_port。
+# 用户已经在端点中包含端口时保持原值，避免生成重复端口。
 - name: 解析完整的控制平面端点
   ansible.builtin.set_fact:
     resolved_control_plane_endpoint: >-
@@ -29,6 +35,7 @@
     group: root
     mode: "0600"
 
+# admin.conf 是 kubeadm 初始化成功的稳定标志；存在时跳过 kubeadm init，保证重复运行安全。
 - name: 检查控制平面是否已初始化
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf
@@ -59,6 +66,7 @@
     group: root
     mode: "0600"
 
+# 后面的 Token、证书上传和 CNI 任务都依赖 API，因此先用 admin.conf 主动等待健康端点。
 - name: 等待 Kubernetes API 就绪
   ansible.builtin.command:
     argv:
@@ -72,6 +80,7 @@
   delay: 5
   until: kubernetes_api_ready.rc == 0
 
+# kubeadm Token 有有效期，所以每次运行都会重新生成，而不是把固定 Token 保存在仓库或变量文件中。
 - name: 生成当前有效的工作节点加入命令
   ansible.builtin.command: kubeadm token create --print-join-command
   register: kubeadm_worker_join
@@ -84,6 +93,7 @@
       {{ kubeadm_worker_join.stdout }} --cri-socket {{ kubernetes_cri_socket }}
   no_log: true
 
+# upload-certs 返回的 certificate-key 用于额外控制平面节点获取共享证书，同样不能写入日志。
 - name: 上传控制平面证书
   ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
   register: kubeadm_upload_certs

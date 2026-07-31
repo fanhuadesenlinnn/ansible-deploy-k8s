@@ -1,4 +1,7 @@
 ---
+# 额外控制平面节点的加入流程。加入命令来自第一台控制平面节点本次运行时动态生成的 hostvars。
+# /etc/kubernetes/admin.conf 存在时认为节点已加入，并跳过包含临时 Token 的 kubeadm join。
+
 - name: 检查当前控制平面节点是否已加入集群
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf

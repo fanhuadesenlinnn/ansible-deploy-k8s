@@ -1,4 +1,9 @@
 ---
+# 离线资源准备 Role：仅在 install_mode=offline 时执行实际工作。
+# 支持两种来源：从 Ansible 控制端复制目录，或由每台目标主机下载同一个 HTTP tar.gz 归档。
+# 最终输出统一位于 offline_remote_dir，后续 Role 不需要关心资源采用哪种传输方式。
+
+# path 与 url 必须二选一；HTTP 内容还必须使用校验和固定，避免节点下载到不同版本。
 - name: 验证离线包来源
   ansible.builtin.assert:
     that:
@@ -46,6 +51,7 @@
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
 
+# 只有下载内容发生变化时才清空子目录，防止新旧归档文件混合后通过完整性检查。
 - name: 在解压已变更的归档前删除旧内容
   ansible.builtin.file:
     path: "{{ offline_remote_dir }}/{{ item }}"
@@ -100,6 +106,7 @@
     - install_mode == 'offline'
     - install_crictl | bool
 
+# 在任何 apt 安装或镜像导入前一次性检查关键文件，使缺失资源尽早失败。
 - name: 确认离线包内容完整
   ansible.builtin.assert:
     that:

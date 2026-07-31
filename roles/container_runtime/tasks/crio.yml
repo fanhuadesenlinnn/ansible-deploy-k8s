@@ -1,4 +1,7 @@
 ---
+# CRI-O 子任务：在线模式配置官方软件源并安装服务；离线模式复用 os_prepare 安装的软件包。
+# 离线镜像通过 podman load 导入 CRI-O 使用的本地容器存储，因此离线包必须包含 podman 及其依赖。
+
 - name: 创建 CRI-O apt 密钥环目录
   ansible.builtin.file:
     path: /etc/apt/keyrings
@@ -54,6 +57,7 @@
   register: offline_crio_image_archives
   when: install_mode == 'offline'
 
+# 仅在确实发现镜像归档时要求 podman，允许不需要预载镜像的特殊离线包跳过此检查。
 - name: 验证 podman 可用于导入离线 CRI-O 镜像
   ansible.builtin.command: podman --version
   changed_when: false

@@ -1,3 +1,5 @@
+# 让桥接流量经过 iptables/ip6tables，CNI 插件和 kube-proxy 才能正确处理 Pod 流量。
 net.bridge.bridge-nf-call-iptables = 1
 net.bridge.bridge-nf-call-ip6tables = 1
+# 允许 Linux 在不同网络接口之间转发 IPv4 数据包，这是 Pod 跨节点通信的基础。
 net.ipv4.ip_forward = 1

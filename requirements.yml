@@ -1,4 +1,6 @@
 ---
+# Ansible Galaxy Collection 依赖。community.general 提供内核模块加载等通用模块。
+# 主版本范围避免自动升级到可能包含不兼容变更的新版本。
 collections:
   - name: community.general
     version: ">=9.0.0,<12.0.0"

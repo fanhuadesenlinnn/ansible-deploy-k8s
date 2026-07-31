@@ -3,6 +3,82 @@
 使用 Ansible 和 kubeadm 安装标准 Kubernetes 集群。本仓库不依赖任何业务应用、私有镜像仓库、内部域名或
 CI/CD 平台。
 
+## 建议阅读顺序
+
+如果你已经了解一点 Linux、Ansible 或 Kubernetes，可以按照下面的顺序快速掌握项目：
+
+1. 先阅读本页的“项目结构”和“部署执行流程”，了解文件之间的调用关系。
+2. 查看 `inventories/example/hosts.yml`，理解控制平面、工作节点和全集群主机组。
+3. 查看 `inventories/example/group_vars/all.yml`，按实际环境修改版本、网络、运行时和安装方式。
+4. 查看主入口 `playbooks/site.yml`，了解各 Role 的执行顺序。
+5. 需要排查某个阶段时，再进入对应的 `roles/<名称>/tasks/main.yml` 查看具体任务。
+
+第一次使用时，通常只需要复制并修改 `inventories/example/`。不要直接修改 Role 中的任务来保存环境差异，
+环境差异应尽量通过 Inventory 变量表达。
+
+## 项目结构
+
+| 路径 | 用途 |
+| --- | --- |
+| `ansible.cfg` | Ansible 的项目级默认设置，例如默认 Inventory、Role 搜索路径和 SSH 连接行为。 |
+| `inventories/example/hosts.yml` | 示例主机清单，定义控制平面节点、工作节点和 SSH 连接参数。 |
+| `inventories/example/group_vars/all.yml` | 集群的主要配置入口，大部分部署行为都由这里的变量控制。 |
+| `playbooks/site.yml` | 安装和扩容集群的主入口，按顺序调用各个 Role。 |
+| `playbooks/addons.yml` | 独立安装或更新可选附加组件。 |
+| `playbooks/artifact-server.yml` | 可选安装 dufs，用于通过 HTTP 提供离线包。 |
+| `playbooks/reset.yml` | 破坏性重置入口，不会被 `site.yml` 自动调用。 |
+| `roles/preflight/` | 在修改主机前检查系统、架构、版本、网络和已有集群状态。 |
+| `roles/artifact_bundle/` | 准备并校验离线软件包、镜像、CNI 清单和 crictl。 |
+| `roles/os_prepare/` | 安装基础工具、关闭 Swap、加载内核模块并配置 sysctl。 |
+| `roles/container_runtime/` | 安装并配置 containerd 或 CRI-O，以及镜像仓库和代理。 |
+| `roles/crictl/` | 安装节点排查工具 crictl，并连接到选定的 CRI Socket。 |
+| `roles/kubernetes_packages/` | 安装并锁定 kubeadm、kubelet 和 kubectl 的指定版本。 |
+| `roles/control_plane/` | 初始化第一台控制平面节点，并将其他控制平面节点加入集群。 |
+| `roles/cni/` | 安装 CNI 网络并等待 CoreDNS 就绪。 |
+| `roles/worker/` | 将工作节点加入集群并确保 kubelet 启动。 |
+| `roles/kubeconfig/` | 将管理员 kubeconfig 安全地导出到 Ansible 控制端。 |
+| `roles/addons/` | 通过 Server-Side Apply 管理可选 Kubernetes 附加组件。 |
+| `files/offline-bundle/` | 离线包目录结构占位符，真实软件包和镜像默认不会被 Git 跟踪。 |
+| `scripts/` | 本地和 CI 共用的辅助检查脚本。 |
+| `.github/` | GitHub Actions 检查与依赖更新配置。 |
+
+## 部署执行流程
+
+运行 `playbooks/site.yml` 时，主要执行顺序如下：
+
+```text
+验证 Inventory 和网络 CIDR
+  → 检查目标主机与已有集群状态
+  → 准备在线或离线安装资源
+  → 准备操作系统
+  → 安装容器运行时和 crictl
+  → 安装 Kubernetes 软件包
+  → 初始化或扩展控制平面
+  → 安装 CNI 网络
+  → 加入工作节点
+  → 导出管理员 kubeconfig
+  → 等待所有节点进入 Ready 状态
+```
+
+该流程具有幂等性：已经初始化或已经加入集群的节点会跳过对应的 kubeadm 操作。预检阶段会拒绝隐式升级
+Kubernetes 或切换已有节点的容器运行时，避免把普通安装误当成迁移或升级流程。
+
+变量通常从 `group_vars/all.yml` 读取，也可以被更具体的 `host_vars` 或命令行 `-e` 覆盖。命令行变量优先级
+很高，执行生产操作前应确认没有遗留或拼写错误的 `-e` 参数。
+
+部署完成后，排查问题时经常会用到这些文件：
+
+| 位置 | 所在机器 | 用途 |
+| --- | --- | --- |
+| `/etc/containerd/config.toml` | 使用 containerd 的节点 | containerd 主配置和 systemd cgroup 设置。 |
+| `/etc/containerd/certs.d/` | 使用 containerd 的节点 | 按镜像仓库保存 endpoint 和 TLS 配置。 |
+| `/etc/crictl.yaml` | 所有启用 crictl 的节点 | crictl 使用的运行时 Socket、超时和重试设置。 |
+| `/etc/kubernetes/kubeadm-init.yaml` | 第一台控制平面节点 | 本项目渲染的 kubeadm 初始化配置。 |
+| `/etc/kubernetes/admin.conf` | 控制平面节点 | 集群管理员 kubeconfig，也是控制平面已初始化的判断依据。 |
+| `/etc/kubernetes/kubelet.conf` | 已加入的节点 | kubelet 身份配置，也是节点已加入集群的判断依据。 |
+| `/etc/kubernetes/cni-manifest.yaml` | 第一台控制平面节点 | 本项目最终应用的 CNI 清单副本。 |
+| `artifacts/<cluster-name>.conf` | Ansible 控制端 | 导出的管理员 kubeconfig，权限应限制为 0600。 |
+
 ## 支持范围
 
 - 使用 systemd 和 apt 的 Ubuntu、Debian 主机

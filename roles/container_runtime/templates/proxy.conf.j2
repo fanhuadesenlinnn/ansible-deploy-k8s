@@ -1,4 +1,6 @@
 [Service]
+# 将 proxy_env 中的键值写入容器运行时 systemd 服务，例如 HTTP_PROXY、HTTPS_PROXY 和 NO_PROXY。
+# to_json 会正确处理空格及特殊字符，避免生成无效的 Environment 行。
 {% for proxy_variable in proxy_env | dict2items %}
 Environment={{ (proxy_variable.key ~ '=' ~ proxy_variable.value) | to_json }}
 {% endfor %}

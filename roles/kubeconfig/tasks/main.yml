@@ -1,4 +1,8 @@
 ---
+# kubeconfig Role：把第一台控制平面节点的 admin.conf 导出到 Ansible 控制端。
+# 输出目录权限为 0700、文件权限为 0600。该文件拥有集群管理员权限，应通过安全渠道保存和分发。
+# kubeconfig_server 只替换导出副本中的访问地址，不会修改节点上的原始 admin.conf。
+
 - name: 创建本地 kubeconfig 输出目录
   ansible.builtin.file:
     path: "{{ kubeconfig_output_dir }}"

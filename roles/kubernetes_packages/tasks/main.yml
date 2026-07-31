@@ -1,4 +1,7 @@
 ---
+# Kubernetes 软件包 Role：在线模式配置官方 apt 源，然后安装指定版本的 kubeadm、kubelet 和 kubectl。
+# 离线模式的软件包已由 os_prepare 安装，本 Role 仍会验证命令并锁定版本，防止 apt 自动升级节点。
+
 - name: 创建 Kubernetes apt 密钥环目录
   ansible.builtin.file:
     path: /etc/apt/keyrings
@@ -39,6 +42,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
+# command 循环既确认文件存在，也能尽早发现离线包版本或依赖不完整。
 - name: 验证 Kubernetes 命令已安装
   ansible.builtin.command: "{{ item }}"
   loop:
@@ -47,6 +51,7 @@
     - kubectl version --client
   changed_when: false
 
+# kubeadm 升级要求严格的版本顺序，因此使用 apt-mark hold 禁止普通系统更新顺带升级这些组件。
 - name: 锁定 Kubernetes 软件包版本
   ansible.builtin.dpkg_selections:
     name: "{{ item }}"

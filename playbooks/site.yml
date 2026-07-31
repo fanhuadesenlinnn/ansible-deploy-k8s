@@ -1,4 +1,9 @@
 ---
+# 集群安装与横向扩容的主入口。
+# 本文件按依赖关系组织多个 Play：先在控制端验证 Inventory，再准备所有节点，随后初始化控制平面、
+# 安装网络、加入工作节点并导出 kubeconfig。除非同时理解前后依赖，否则不要随意调整执行顺序。
+
+# 这个 Play 只在 Ansible 控制端运行，不会连接或修改远程主机。
 - name: 验证 Inventory
   hosts: localhost
   gather_facts: false
@@ -21,6 +26,7 @@
           工作节点都必须同时属于 k8s_cluster。
         success_msg: Inventory 结构验证通过。
 
+    # 使用 Python 标准库解析 CIDR，比仅用字符串比较更准确，也能同时发现格式错误。
     - name: 验证集群网络 CIDR
       ansible.builtin.command:
         argv:
@@ -38,6 +44,7 @@
       check_mode: false
       become: false
 
+# 这些 Role 在所有控制平面和工作节点上执行，负责完成 kubeadm 运行前的共同准备。
 - name: 准备 Kubernetes 主机
   hosts: k8s_cluster
   become: true
@@ -51,6 +58,7 @@
       when: install_crictl | bool
     - kubernetes_packages
 
+# serial=1 保证控制平面节点逐台操作，避免多个节点同时初始化或申请加入凭据。
 - name: 初始化或扩展控制平面
   hosts: kube_control_plane
   become: true
@@ -59,6 +67,7 @@
   roles:
     - control_plane
 
+# CNI 只需从第一台控制平面节点应用一次，Kubernetes API 会将资源同步到整个集群。
 - name: 安装集群网络
   hosts: "kube_control_plane[0]"
   become: true
@@ -66,6 +75,7 @@
   roles:
     - cni
 
+# 加入命令由第一台控制平面节点在前面的 Play 中动态生成，并通过 hostvars 传递。
 - name: 加入工作节点
   hosts: kube_workers
   become: true
@@ -73,6 +83,7 @@
   roles:
     - worker
 
+# fetch 会把远程 admin.conf 保存到控制端的 artifacts/，而不是留在执行命令的当前目录。
 - name: 导出管理员 kubeconfig
   hosts: "kube_control_plane[0]"
   become: true
@@ -80,6 +91,7 @@
   roles:
     - kubeconfig
 
+# 最后等待所有节点 Ready，可以尽早暴露 CNI、kubelet 或容器运行时问题。
 - name: 验证所有已注册节点进入就绪状态
   hosts: "kube_control_plane[0]"
   become: true

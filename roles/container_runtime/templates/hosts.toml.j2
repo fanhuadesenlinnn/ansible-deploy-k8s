@@ -1,5 +1,9 @@
+# 此文件对应原始仓库 {{ item.key }}，由 containerd 的 config_path 自动发现。
+# server 和 host.endpoint 指向实际使用的镜像仓库或缓存代理。
 server = "{{ item.value.endpoint }}"
 
 [host."{{ item.value.endpoint }}"]
+  # pull 允许拉取内容，resolve 允许解析镜像 Tag 到 Digest。
   capabilities = ["pull", "resolve"]
+  # true 会跳过 TLS 证书验证，只适合明确受控的测试或内部环境。
   skip_verify = {{ item.value.skip_verify | default(false) | lower }}

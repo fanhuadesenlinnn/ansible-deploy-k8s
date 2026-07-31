@@ -1,4 +1,9 @@
 ---
+# 预检 Role：在安装软件包或修改系统之前尽早发现不支持或高风险的配置。
+# 主要输入：Ansible Facts、Kubernetes/运行时/网络变量以及 Inventory 分组。
+# 本 Role 只读取主机状态并执行断言，不负责自动修复版本迁移、运行时迁移或高可用入口。
+
+# 当前实现依赖 apt、systemd 和后续任务使用的 Debian 软件包格式。
 - name: 验证操作系统系列是否受支持
   ansible.builtin.assert:
     that:
@@ -45,6 +50,8 @@
       kubeadm v1beta4，因此要求 Kubernetes 1.31 或更高版本。
     success_msg: 安装变量验证通过。
 
+# admin.conf 表示控制平面已初始化，kubelet.conf 表示普通节点已经加入集群。
+# 后续检查只对已有集群状态的节点执行，避免在全新主机上误报命令不存在。
 - name: 检查现有 Kubernetes 节点状态
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -81,6 +88,7 @@
   when:
     - kubernetes_kubelet_instance_config.stat.exists | default(false)
 
+# kubelet 的 instance-config.yaml 记录实际使用的 CRI Socket，比仅检查当前变量更可靠。
 - name: 拒绝隐式迁移容器运行时
   ansible.builtin.assert:
     that:
@@ -94,6 +102,7 @@
   when:
     - kubernetes_kubelet_instance_config.stat.exists | default(false)
 
+# site.yml 是安装/扩容流程，不包含 drain、逐版本升级和控制平面升级等必要步骤。
 - name: 拒绝通过安装 Playbook 隐式升级 Kubernetes
   ansible.builtin.assert:
     that:
@@ -112,6 +121,7 @@
     | list
     | length > 0
 
+# 多控制平面节点必须共享一个稳定入口，否则客户端和后续节点会依赖第一台主机的临时地址。
 - name: 要求高可用控制平面使用稳定端点
   ansible.builtin.assert:
     that:

@@ -1,4 +1,7 @@
 ---
+# 工作节点加入流程。kubelet.conf 是节点已成功加入集群的标志，用于保证重复执行不会重复 join。
+# 加入命令包含临时 Token，由第一台控制平面节点动态生成，并使用 no_log 防止泄露到 Ansible 输出。
+
 - name: 检查当前工作节点是否已加入集群
   ansible.builtin.stat:
     path: /etc/kubernetes/kubelet.conf

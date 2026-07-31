@@ -1,4 +1,7 @@
 ---
+# containerd 子任务：安装服务、生成基础配置、启用 systemd cgroup、配置镜像端点并导入离线镜像。
+# 在线模式由 apt 安装；离线模式的软件包已由 os_prepare 统一安装，因此这里只验证命令是否存在。
+
 - name: 在在线模式下安装 containerd
   ansible.builtin.apt:
     name: "{{ containerd_package }}"
@@ -25,6 +28,7 @@
     path: /etc/containerd/config.toml
   register: containerd_config
 
+# 仅在配置文件不存在时生成默认配置，避免覆盖管理员已有的 containerd 自定义内容。
 - name: 生成 containerd 默认配置
   ansible.builtin.command: containerd config default
   register: containerd_default_config
@@ -41,6 +45,7 @@
   notify: 重启 containerd
   when: not containerd_config.stat.exists
 
+# kubelet 和 containerd 必须使用一致的 cgroup 驱动；本项目统一采用 Kubernetes 推荐的 systemd。
 - name: 在 containerd 中使用 systemd cgroup 驱动
   ansible.builtin.replace:
     path: /etc/containerd/config.toml
@@ -48,6 +53,7 @@
     replace: 'SystemdCgroup = true'
   notify: 重启 containerd
 
+# config_path 让 containerd 从 /etc/containerd/certs.d/<仓库>/hosts.toml 读取逐仓库配置。
 - name: 启用 containerd 镜像仓库主机配置
   ansible.builtin.replace:
     path: /etc/containerd/config.toml
@@ -83,6 +89,7 @@
     state: started
     enabled: true
 
+# 配置变更后先重启 containerd，再继续导入镜像或运行 crictl 连通性检查。
 - name: 执行待处理的 containerd Handler
   ansible.builtin.meta: flush_handlers
 
@@ -94,6 +101,7 @@
   register: offline_image_archives
   when: install_mode == 'offline'
 
+# Kubernetes 通过 CRI 使用 containerd 的 k8s.io namespace，因此离线镜像必须导入该 namespace。
 - name: 将离线镜像导入 containerd
   ansible.builtin.command:
     argv:

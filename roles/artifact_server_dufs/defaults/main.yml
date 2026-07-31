@@ -1,6 +1,10 @@
 ---
+# dufs Role 的可覆盖默认值。Inventory 中的同名变量优先级更高。
+# dufs_bind=0.0.0.0 表示监听所有网卡；生产环境应通过防火墙限制可访问的节点网段。
 dufs_version: v0.46.0
 dufs_port: 666
 dufs_bind: 0.0.0.0
+# 该目录通过 HTTP 只读共享，默认与离线资源在目标主机上的目录一致。
 dufs_root: /opt/ansible-install-k8s/offline
+# 在线安装必须设置正确的 SHA-256；示例 group_vars 会按架构提供该值。
 dufs_checksum: ""
