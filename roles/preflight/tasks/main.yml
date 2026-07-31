@@ -19,8 +19,85 @@
       - install_mode in ['online', 'offline']
       - kubernetes_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
       - kubernetes_version_minor is match('^v[0-9]+\.[0-9]+$')
+      - kubernetes_version is ansible.builtin.version('1.31.0', '>=')
+      - >-
+        kubernetes_version_minor ==
+        'v' ~ kubernetes_version.split('.')[0] ~ '.' ~ kubernetes_version.split('.')[1]
       - pod_network_cidr != service_cidr
-    fail_msg: Review the version, runtime, install mode, and cluster CIDR variables.
+      - >-
+        install_mode == 'offline' or cni_manifest_file | length > 0 or
+        (cni_manifest_url | length > 0 and
+        cni_manifest_checksum | default('') | length > 0)
+    fail_msg: >-
+      Review the version, runtime, install mode, and cluster CIDR variables.
+      Online CNI downloads require a URL and checksum. This project requires
+      Kubernetes 1.31+ because it uses kubeadm v1beta4.
+
+- name: Inspect existing Kubernetes node state
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/kubernetes/admin.conf
+    - /etc/kubernetes/kubelet.conf
+  register: kubernetes_existing_state_files
+
+- name: Read the installed kubelet version on configured nodes
+  ansible.builtin.command: kubelet --version
+  register: kubernetes_installed_kubelet_version
+  changed_when: false
+  failed_when: false
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
+
+- name: Inspect the configured kubelet runtime endpoint
+  ansible.builtin.stat:
+    path: /var/lib/kubelet/instance-config.yaml
+  register: kubernetes_kubelet_instance_config
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
+
+- name: Read the configured kubelet runtime endpoint
+  ansible.builtin.slurp:
+    src: /var/lib/kubelet/instance-config.yaml
+  register: kubernetes_kubelet_instance_config_content
+  when:
+    - kubernetes_kubelet_instance_config.stat.exists | default(false)
+
+- name: Refuse an implicit container runtime migration
+  ansible.builtin.assert:
+    that:
+      - >-
+        kubernetes_cri_socket in
+        (kubernetes_kubelet_instance_config_content.content | b64decode)
+    fail_msg: >-
+      This node is configured for a different CRI socket. Changing
+      container_runtime on an existing node requires a dedicated migration.
+  when:
+    - kubernetes_kubelet_instance_config.stat.exists | default(false)
+
+- name: Refuse implicit Kubernetes upgrades through the install playbook
+  ansible.builtin.assert:
+    that:
+      - kubernetes_installed_kubelet_version.rc == 0
+      - >-
+        kubernetes_installed_kubelet_version.stdout
+        | regex_search('v[0-9]+\.[0-9]+\.[0-9]+')
+        == 'v' ~ kubernetes_version
+    fail_msg: >-
+      This node already belongs to a Kubernetes cluster, but its kubelet version
+      differs from kubernetes_version. site.yml does not perform kubeadm upgrades;
+      use a dedicated, version-aware upgrade procedure instead.
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
 
 - name: Require a stable endpoint for a highly available control plane
   ansible.builtin.assert:

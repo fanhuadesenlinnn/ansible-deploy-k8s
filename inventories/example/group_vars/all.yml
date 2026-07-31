@@ -2,7 +2,8 @@
 # Cluster identity and Kubernetes packages.
 cluster_name: demo
 kubernetes_version: "1.36.3"
-kubernetes_version_minor: "v1.36"
+kubernetes_version_minor: >-
+  v{{ kubernetes_version.split('.')[0] }}.{{ kubernetes_version.split('.')[1] }}
 kubernetes_package_version: "{{ kubernetes_version }}-1.1"
 kubernetes_apt_repository: >-
   deb [signed-by=/etc/apt/keyrings/kubernetes.asc]
@@ -42,6 +43,7 @@ api_server_cert_sans: []
 cni_plugin: flannel
 cni_manifest_url: >-
   https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
+cni_manifest_checksum: sha256:4148e659a834b51fc9aadc429281c6e80c97e0e25475faacd4cc857dbd16f21b
 cni_manifest_file: ""
 offline_cni_manifest: kube-flannel.yml
 
@@ -49,6 +51,7 @@ offline_cni_manifest: kube-flannel.yml
 install_mode: online  # online or offline
 offline_bundle_path: ""
 offline_bundle_url: ""
+offline_bundle_checksum: ""
 offline_remote_dir: /opt/ansible-install-k8s/offline
 
 # Optional HTTP proxy environment passed to package/download tasks.
@@ -65,6 +68,7 @@ registry_mirrors: {}
 kubelet_max_pods: 110
 kubeadm_extra_args: []
 kubelet_node_ip: ""
+kubernetes_apply_force_conflicts: false
 
 # Where the controller stores the fetched administrator kubeconfig.
 kubeconfig_output_dir: "{{ playbook_dir }}/../artifacts"
@@ -78,9 +82,15 @@ addons:
   reloader: false
   istio: false
 addon_manifests:
-  metrics_server: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-  cert_manager: https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
-  reloader: https://raw.githubusercontent.com/stakater/Reloader/master/deployments/kubernetes/reloader.yaml
+  metrics_server: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
+  cert_manager: https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
+  reloader: >-
+    https://raw.githubusercontent.com/stakater/Reloader/chart-v2.2.12/deployments/kubernetes/reloader.yaml
+  istio: ""
+addon_manifest_checksums:
+  metrics_server: sha256:1cec29a5267809306a2c6ec74a3e449abbb705b4a8beed0c8a1963910f72c79b
+  cert_manager: sha256:5f6a499b8c1857d57f560f536e0dcc830914b45c420899fe7ad0692c8624e408
+  reloader: sha256:d3f8faee2f4a9275a7958d76205115a111b441c47f6cc31abd749fc4c31e6a53
   istio: ""
 
 # Optional dufs artifact server. It is not required by site.yml.
@@ -90,3 +100,7 @@ dufs_root: "{{ offline_remote_dir }}"
 dufs_download_url: >-
   {{ 'https://github.com/sigoden/dufs/releases/download/' ~ dufs_version
      ~ '/dufs-' ~ dufs_version ~ '-' ~ dufs_arch ~ '-unknown-linux-musl.tar.gz' }}
+dufs_checksums:
+  x86_64: sha256:817769f726613194bcff9d0e3e481eaccc86ac11208857614f36a8c02f410977
+  aarch64: sha256:1472123ae3aa07e49404d16b20305c2dec90c59883ebda9308717f7205e6511b
+dufs_checksum: "{{ dufs_checksums[dufs_arch] }}"

@@ -18,6 +18,7 @@
   ansible.builtin.get_url:
     url: "{{ cni_manifest_url }}"
     dest: "{{ remote_cni_manifest }}"
+    checksum: "{{ cni_manifest_checksum | default(omit, true) }}"
     owner: root
     group: root
     mode: "0644"
@@ -43,22 +44,31 @@
     replace: "{{ pod_network_cidr }}"
   when: cni_plugin == 'flannel'
 
-- name: Apply the CNI manifest
+- name: Check whether the CNI manifest would change the cluster
   ansible.builtin.command:
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - apply
+      - diff
       - --server-side
-      - --force-conflicts
       - --field-manager=ansible-deploy-k8s
       - -f
       - "{{ remote_cni_manifest }}"
+  register: cni_diff_result
+  changed_when: false
+  failed_when: cni_diff_result.rc not in [0, 1]
+
+- name: Apply the CNI manifest when it has changed
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig=/etc/kubernetes/admin.conf', 'apply',
+          '--server-side', '--field-manager=ansible-deploy-k8s']
+         + (['--force-conflicts']
+            if kubernetes_apply_force_conflicts | default(false) | bool else [])
+         + ['-f', remote_cni_manifest] }}
+  when: cni_diff_result.rc == 1
+  changed_when: true
   register: cni_apply_result
-  changed_when: >-
-    'created' in cni_apply_result.stdout or
-    'configured' in cni_apply_result.stdout or
-    'serverside-applied' in cni_apply_result.stdout
 
 - name: Wait for CoreDNS after CNI installation
   ansible.builtin.command:

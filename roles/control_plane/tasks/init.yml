@@ -76,6 +76,7 @@
   ansible.builtin.command: kubeadm token create --print-join-command
   register: kubeadm_worker_join
   changed_when: false
+  no_log: true
 
 - name: Publish the worker join command for later plays
   ansible.builtin.set_fact:
@@ -87,6 +88,7 @@
   ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
   register: kubeadm_upload_certs
   changed_when: true
+  no_log: true
   when: groups['kube_control_plane'] | length > 1
 
 - name: Publish the additional control-plane join command

@@ -3,6 +3,13 @@
   ansible.builtin.set_fact:
     dufs_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'aarch64'}[ansible_architecture] }}"
 
+- name: Require a checksum for online dufs downloads
+  ansible.builtin.assert:
+    that:
+      - dufs_checksum | length > 0
+    fail_msg: Set dufs_checksum to the SHA-256 digest of dufs_download_url.
+  when: install_mode == 'online'
+
 - name: Ensure the artifact root exists
   ansible.builtin.file:
     path: "{{ dufs_root }}"
@@ -15,6 +22,7 @@
   ansible.builtin.get_url:
     url: "{{ dufs_download_url }}"
     dest: "/tmp/dufs-{{ dufs_version }}.tar.gz"
+    checksum: "{{ dufs_checksum | default(omit, true) }}"
     owner: root
     group: root
     mode: "0644"

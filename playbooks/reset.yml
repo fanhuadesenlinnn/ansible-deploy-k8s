@@ -5,14 +5,17 @@
   gather_facts: false
   vars:
     kubernetes_reset_confirm: false
+    kubernetes_reset_cluster_name: ""
   tasks:
     - name: Require explicit destructive-operation confirmation
       ansible.builtin.assert:
         that:
           - kubernetes_reset_confirm | bool
+          - kubernetes_reset_cluster_name == cluster_name
         fail_msg: >-
-          Reset is destructive. Run again with -e kubernetes_reset_confirm=true
-          after verifying the selected inventory and hosts.
+          Reset is destructive. After verifying the selected inventory and hosts,
+          run again with -e kubernetes_reset_confirm=true and
+          -e kubernetes_reset_cluster_name={{ cluster_name }}.
 
     - name: Reset kubeadm state
       ansible.builtin.command:
@@ -20,6 +23,8 @@
           - kubeadm
           - reset
           - --force
+          - --cri-socket
+          - "{{ kubernetes_cri_socket }}"
       register: kubeadm_reset_result
       changed_when: kubeadm_reset_result.rc == 0
 
@@ -37,7 +42,20 @@
         path: /etc/kubernetes
         state: absent
 
+    - name: Remove the root kubeconfig created by this project
+      ansible.builtin.file:
+        path: /root/.kube/config
+        state: absent
+
     - name: Restart the container runtime
       ansible.builtin.service:
         name: "{{ container_runtime_service }}"
         state: restarted
+
+    - name: Remove the exported administrator kubeconfig
+      ansible.builtin.file:
+        path: "{{ kubeconfig_output_file }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      run_once: true

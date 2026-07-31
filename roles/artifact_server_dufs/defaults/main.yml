@@ -3,3 +3,4 @@ dufs_version: v0.46.0
 dufs_port: 666
 dufs_bind: 0.0.0.0
 dufs_root: /opt/ansible-install-k8s/offline
+dufs_checksum: ""

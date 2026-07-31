@@ -8,7 +8,34 @@
         that:
           - groups['kube_control_plane'] | default([]) | length > 0
           - groups['k8s_cluster'] | default([]) | length > 0
-        fail_msg: Inventory must define kube_control_plane and k8s_cluster groups.
+          - >-
+            groups['kube_control_plane']
+            | difference(groups['k8s_cluster'] | default([]))
+            | length == 0
+          - >-
+            groups['kube_workers'] | default([])
+            | difference(groups['k8s_cluster'] | default([]))
+            | length == 0
+        fail_msg: >-
+          Inventory must define kube_control_plane and k8s_cluster, and every
+          control-plane and worker host must also belong to k8s_cluster.
+
+    - name: Validate cluster network CIDRs
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - -c
+          - >-
+            import ipaddress, sys;
+            pod = ipaddress.ip_network(sys.argv[1]);
+            service = ipaddress.ip_network(sys.argv[2]);
+            sys.exit('pod_network_cidr and service_cidr must not overlap'
+            if pod.overlaps(service) else 0)
+          - "{{ pod_network_cidr }}"
+          - "{{ service_cidr }}"
+      changed_when: false
+      check_mode: false
+      become: false
 
 - name: Prepare Kubernetes hosts
   hosts: k8s_cluster

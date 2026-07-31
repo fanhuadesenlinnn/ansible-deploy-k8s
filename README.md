@@ -14,12 +14,13 @@ private registry, internal DNS name, or CI/CD platform.
 - optional metrics-server, cert-manager, Reloader, and Istio manifests
 
 This project does not deploy business applications, Git servers, CI systems, storage systems, or container registries.
+It installs new clusters and supports adding nodes; it does not perform in-place Kubernetes upgrades.
 
 ## Safety properties
 
 - A normal installation never runs `kubeadm reset`.
 - Existing `/etc/kubernetes/admin.conf` and `/etc/kubernetes/kubelet.conf` files prevent reinitialization and rejoin.
-- Destructive reset is isolated in `playbooks/reset.yml` and requires an explicit confirmation variable.
+- Destructive reset is isolated in `playbooks/reset.yml` and requires a boolean confirmation plus the cluster name.
 - No real credentials or production inventory are stored in the repository.
 - NodePort defaults are not widened and operating-system package mirrors are not overwritten.
 
@@ -48,6 +49,8 @@ cp -R inventories/example inventories/my-cluster
 $EDITOR inventories/my-cluster/hosts.yml
 $EDITOR inventories/my-cluster/group_vars/all.yml
 ```
+
+Non-example inventory directories are ignored by Git to reduce the chance of committing production addresses or secrets.
 
 Verify connectivity and install:
 
@@ -98,6 +101,7 @@ install_mode: offline
 offline_bundle_path: /absolute/path/on/ansible-controller/k8s-offline-bundle
 # Alternatively:
 # offline_bundle_url: http://artifact-server.example/k8s-offline-bundle.tar.gz
+# offline_bundle_checksum: sha256:<archive checksum>
 ```
 
 The extracted bundle must contain `packages/*.deb`, `images/*.tar`, and `manifests/<cni file>`. Any HTTP server can host
@@ -129,10 +133,23 @@ Reset is intentionally separate and destructive:
 
 ```bash
 ansible-playbook -i inventories/my-cluster/hosts.yml playbooks/reset.yml \
-  -e kubernetes_reset_confirm=true
+  -e kubernetes_reset_confirm=true \
+  -e kubernetes_reset_cluster_name=my-cluster-name
 ```
 
 Review the playbook before running it. It removes kubeadm state and CNI network configuration from the selected hosts.
+It also removes the root kubeconfig installed on each host and the exported controller-side kubeconfig. As documented by
+kubeadm, reset does not remove iptables, nftables, or IPVS rules; clean those separately when a completely pristine host
+is required.
+
+## Existing clusters and upgrades
+
+`playbooks/site.yml` is intentionally an install and scale-out workflow. On a configured node, it verifies that the
+installed kubelet patch version matches `kubernetes_version` and fails before changing packages when it does not. Follow
+the upstream kubeadm upgrade sequence for upgrades; changing `kubernetes_version` alone is not an upgrade procedure.
+
+Treat the container runtime, pod and service CIDRs, and control-plane endpoint as immutable after initialization unless
+you are following a dedicated Kubernetes migration or reconfiguration procedure.
 
 ## Main variables
 
@@ -144,14 +161,18 @@ All documented defaults are in `inventories/example/group_vars/all.yml`. Importa
 - `control_plane_endpoint`
 - `api_server_cert_sans`
 - `cni_manifest_url` or `cni_manifest_file`
+- `cni_manifest_checksum`
 - `install_mode`
+- `offline_bundle_checksum`
 - `registry_mirrors`
 - `proxy_env`
+- `kubernetes_apply_force_conflicts` (disabled by default)
 
 ## Validation
 
 ```bash
+pip install -r requirements-dev.txt
 yamllint .
 ansible-lint
-ansible-playbook -i inventories/example/hosts.yml playbooks/site.yml --syntax-check
+just check
 ```

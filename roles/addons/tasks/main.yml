@@ -9,7 +9,11 @@
   ansible.builtin.assert:
     that:
       - addon_manifests[item] | default('') | length > 0 or install_mode == 'offline'
-    fail_msg: "Set addon_manifests.{{ item }} before enabling this add-on."
+      - >-
+        install_mode == 'offline' or
+        (addon_manifest_checksums | default({})).get(item, '') | length > 0
+    fail_msg: >-
+      Set addon_manifests.{{ item }} and its checksum before enabling this add-on.
   loop: "{{ enabled_addons }}"
 
 - name: Create the remote add-on manifest directory
@@ -24,6 +28,7 @@
   ansible.builtin.get_url:
     url: "{{ addon_manifests[item] }}"
     dest: "/etc/kubernetes/addons/{{ item }}.yaml"
+    checksum: "{{ addon_manifest_checksums[item] }}"
     owner: root
     group: root
     mode: "0644"
@@ -42,23 +47,34 @@
   loop: "{{ enabled_addons }}"
   when: install_mode == 'offline'
 
-- name: Apply enabled add-ons
+- name: Check whether enabled add-ons would change the cluster
   ansible.builtin.command:
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - apply
+      - diff
       - --server-side
-      - --force-conflicts
       - --field-manager=ansible-deploy-k8s
       - -f
       - "/etc/kubernetes/addons/{{ item }}.yaml"
   loop: "{{ enabled_addons }}"
-  register: addon_apply_result
-  changed_when: >-
-    'created' in addon_apply_result.stdout or
-    'configured' in addon_apply_result.stdout or
-    'serverside-applied' in addon_apply_result.stdout
+  register: addon_diff_results
+  changed_when: false
+  failed_when: addon_diff_results.rc not in [0, 1]
+
+- name: Apply enabled add-ons when they have changed
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig=/etc/kubernetes/admin.conf', 'apply',
+          '--server-side', '--field-manager=ansible-deploy-k8s']
+         + (['--force-conflicts']
+            if kubernetes_apply_force_conflicts | default(false) | bool else [])
+         + ['-f', '/etc/kubernetes/addons/' ~ item.item ~ '.yaml'] }}
+  loop: "{{ addon_diff_results.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc == 1
+  changed_when: true
 
 - name: Report when no add-ons are enabled
   ansible.builtin.debug:

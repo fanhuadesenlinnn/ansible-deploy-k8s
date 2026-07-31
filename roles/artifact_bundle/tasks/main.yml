@@ -3,7 +3,12 @@
   ansible.builtin.assert:
     that:
       - (offline_bundle_path | length > 0) != (offline_bundle_url | length > 0)
-    fail_msg: Set exactly one of offline_bundle_path or offline_bundle_url in offline mode.
+      - >-
+        offline_bundle_url | length == 0 or
+        offline_bundle_checksum | default('') | length > 0
+    fail_msg: >-
+      Set exactly one of offline_bundle_path or offline_bundle_url in offline
+      mode, and provide offline_bundle_checksum for an HTTP archive.
   when: install_mode == 'offline'
 
 - name: Create offline bundle directory
@@ -30,13 +35,29 @@
   ansible.builtin.get_url:
     url: "{{ offline_bundle_url }}"
     dest: /tmp/ansible-install-k8s-offline-bundle.tar.gz
+    checksum: "{{ offline_bundle_checksum | default(omit, true) }}"
     owner: root
     group: root
     mode: "0644"
   environment: "{{ proxy_env }}"
+  register: offline_bundle_download
   when:
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
+
+- name: Remove stale content before extracting a changed archive
+  ansible.builtin.file:
+    path: "{{ offline_remote_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - packages
+    - images
+    - manifests
+    - bin
+  when:
+    - install_mode == 'offline'
+    - offline_bundle_url | length > 0
+    - offline_bundle_download.changed
 
 - name: Extract offline bundle archive
   ansible.builtin.unarchive:
@@ -56,9 +77,57 @@
   register: offline_deb_packages
   when: install_mode == 'offline'
 
-- name: Require Debian packages in offline bundle
+- name: Inspect offline container images
+  ansible.builtin.find:
+    paths: "{{ offline_remote_dir }}/images"
+    patterns: "*.tar"
+    file_type: file
+  register: offline_bundle_images
+  when: install_mode == 'offline'
+
+- name: Inspect the offline CNI manifest
+  ansible.builtin.stat:
+    path: "{{ offline_remote_dir }}/manifests/{{ offline_cni_manifest }}"
+  register: offline_bundle_cni_manifest
+  when: install_mode == 'offline'
+
+- name: Require a complete offline bundle
   ansible.builtin.assert:
     that:
       - offline_deb_packages.matched | int > 0
-    fail_msg: "The offline bundle must contain packages/*.deb for the target OS and architecture."
+      - >-
+        offline_deb_packages.files
+        | map(attribute='path')
+        | map('basename')
+        | select('match', '^kubeadm_.*\.deb$')
+        | list
+        | length > 0
+      - >-
+        offline_deb_packages.files
+        | map(attribute='path')
+        | map('basename')
+        | select('match', '^kubelet_.*\.deb$')
+        | list
+        | length > 0
+      - >-
+        offline_deb_packages.files
+        | map(attribute='path')
+        | map('basename')
+        | select('match', '^kubectl_.*\.deb$')
+        | list
+        | length > 0
+      - >-
+        offline_deb_packages.files
+        | map(attribute='path')
+        | map('basename')
+        | select('match', '^' ~ (containerd_package if container_runtime == 'containerd' else 'cri-o') ~ '_.*\.deb$')
+        | list
+        | length > 0
+      - offline_bundle_images.matched | int > 0
+      - offline_bundle_cni_manifest.stat.exists
+      - offline_bundle_cni_manifest.stat.isreg
+    fail_msg: >-
+      The offline bundle must include kubeadm, kubelet, kubectl, the selected
+      runtime and all dependencies under packages/, at least one images/*.tar,
+      and the configured CNI manifest under manifests/.
   when: install_mode == 'offline'

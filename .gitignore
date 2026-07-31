@@ -15,5 +15,8 @@ files/offline-bundle/manifests/*
 !files/offline-bundle/packages/.gitkeep
 !files/offline-bundle/images/.gitkeep
 !files/offline-bundle/manifests/.gitkeep
+inventories/*
+!inventories/example/
+!inventories/example/**
 inventories/*/host_vars/
 inventories/*/group_vars/vault.yml

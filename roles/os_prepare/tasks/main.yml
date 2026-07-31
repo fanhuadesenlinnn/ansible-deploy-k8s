@@ -18,7 +18,7 @@
 - name: Install all packages from the offline bundle  # noqa command-instead-of-module
   ansible.builtin.shell:
     cmd: >-
-      apt-get install -y
+      apt-get install -y --no-download
       {{ offline_deb_packages.files | map(attribute='path') | map('quote') | join(' ') }}
   args:
     executable: /bin/bash

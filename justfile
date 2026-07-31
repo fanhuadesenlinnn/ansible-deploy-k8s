@@ -6,10 +6,18 @@ install:
     python3 -m pip install -r requirements.txt
     ansible-galaxy collection install -r requirements.yml
 
+install-dev:
+    python3 -m pip install -r requirements-dev.txt
+    ansible-galaxy collection install -r requirements.yml
+
 check:
+    yamllint .
+    ansible-lint
+    bash scripts/check-no-private-data.sh
     ansible-playbook -i {{inventory}} playbooks/site.yml --syntax-check
     ansible-playbook -i {{inventory}} playbooks/addons.yml --syntax-check
     ansible-playbook -i {{inventory}} playbooks/reset.yml --syntax-check
+    ansible-playbook -i {{inventory}} playbooks/artifact-server.yml --syntax-check
 
 ping:
     ansible -i {{inventory}} k8s_cluster -m ansible.builtin.ping
