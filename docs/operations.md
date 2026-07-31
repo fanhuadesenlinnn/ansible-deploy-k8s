@@ -1,5 +1,22 @@
 # 运维、排查与重置
 
+## 统一操作入口
+
+推荐使用根目录的 `ops.sh` 执行常见操作：
+
+```bash
+./ops.sh check -i inventories/my-cluster/hosts.yml --executor docker
+./ops.sh ping -i inventories/my-cluster/hosts.yml --executor docker
+./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online
+./ops.sh addons -i inventories/my-cluster/hosts.yml --executor docker
+```
+
+所有部署命令都会先显示执行环境、安装模式、Inventory、资源来源和底层命令。人工操作需要再次确认；自动化环境
+必须显式传入 `--yes`。使用 `--plan` 只显示部署命令，不连接或修改节点。
+
+本机已安装 Ansible 时使用 `--executor local`；本机只安装 Docker 时使用 `--executor docker`。两种方式调用相同
+Playbook，不会产生两套部署逻辑。
+
 ## 适用操作
 
 `playbooks/site.yml` 用于安装新集群和添加节点。它不会执行 Kubernetes 版本升级，也不会迁移已经加入集群的

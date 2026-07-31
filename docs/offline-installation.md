@@ -3,6 +3,58 @@
 离线模式使用与传输方式无关的离线包。Ansible 可以从控制端复制该目录，也可以让所有节点从 dufs、Nginx、
 MinIO 或对象存储网关等 HTTP 服务下载同一个 tar 归档。
 
+## 使用 ops.sh 制作离线包
+
+制作机器需要能够访问软件源、GitHub 和镜像仓库，并安装可用的 Docker。目标节点不需要访问公网。
+
+下面的命令会启动一次性 Ubuntu 24.04 构建容器，为 amd64 节点下载精确版本的 Kubernetes deb、containerd
+及依赖、crictl、Flannel 清单和全部相关镜像：
+
+```bash
+./ops.sh offline-build \
+  --distro ubuntu \
+  --release 24.04 \
+  --arch amd64 \
+  --kubernetes-version 1.36.3
+```
+
+第一次正式下载前可以只检查解析结果：
+
+```bash
+./ops.sh offline-build \
+  --distro ubuntu \
+  --release 24.04 \
+  --arch amd64 \
+  --plan
+```
+
+默认输出位于 `dist/offline/`，包括离线目录、HTTP 分发使用的 tar.gz 和归档 SHA-256。构建过程先写入系统临时
+目录，全部资源和内部 `SHA256SUMS` 验证通过后才移动到最终目录；如果输出已经存在，脚本会停止而不是覆盖。
+
+当前自动制作功能支持：
+
+- Ubuntu 或 Debian 目标系统；
+- amd64 或 arm64；
+- containerd；
+- Flannel，或能够提供固定 YAML URL 和 SHA-256 的其他 CNI；
+- 通过多个 `--extra-image` 添加业务或附加组件镜像。
+
+使用其他静态 CNI 清单时，必须固定清单 URL 和摘要，例如：
+
+```bash
+./ops.sh offline-build \
+  --distro ubuntu \
+  --release 24.04 \
+  --arch amd64 \
+  --cni calico \
+  --cni-manifest-url https://example.internal/calico.yaml \
+  --cni-manifest-checksum sha256:<64位摘要> \
+  --cni-manifest-name calico.yaml
+```
+
+脚本会从静态 YAML 的 `image:` 字段收集 CNI 镜像。使用 Helm、多文件或运行时动态选择镜像的 CNI 时，应通过
+`--extra-image` 补齐镜像，或先生成一份最终静态清单。第一版制作工具不支持 CRI-O。
+
 ## 离线包结构
 
 ```text
@@ -55,6 +107,18 @@ install_mode: offline
 offline_bundle_path: /srv/k8s-offline-bundle
 offline_bundle_url: ""
 ```
+
+使用统一入口部署时不必修改这三个变量，`ops.sh` 会以额外变量传给 Playbook：
+
+```bash
+./ops.sh deploy \
+  -i inventories/my-cluster/hosts.yml \
+  --executor docker \
+  --mode offline \
+  --bundle dist/offline/k8s-1.36.3-ubuntu-24.04-amd64
+```
+
+Docker 执行环境只能访问仓库目录内的文件，因此离线包应保存在 `dist/`、`files/` 或其他仓库子目录中。
 
 ## 通过 HTTP 下载
 

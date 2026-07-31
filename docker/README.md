@@ -3,7 +3,17 @@
 本目录把 Ansible 控制端依赖封装进容器。本机只需要 Docker 和 Compose 插件；目标 Kubernetes 节点仍由
 现有 Playbook 通过 SSH 管理。
 
+在仓库根目录执行统一入口最简单：
+
+```bash
+./ops.sh deploy \
+  -i inventories/my-cluster/hosts.yml \
+  --executor docker \
+  --mode online
+```
+
 推荐入口 `run.sh` 适用于带 Bash 的 macOS、Linux 或 WSL。其他环境仍可直接使用文末的 Compose 命令。
+需要完全控制底层 Ansible 参数时，可以直接调用 `run.sh`。
 
 ## 文件说明
 

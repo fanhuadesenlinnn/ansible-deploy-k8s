@@ -35,6 +35,7 @@
 | `roles/kubeconfig/` | 将管理员 kubeconfig 导出到控制端。 |
 | `roles/addons/` | 管理可选 Kubernetes 组件。 |
 | `docker/` | 无需在宿主机安装 Python/Ansible 的容器化控制端环境。 |
+| `ops.sh`、`ops/` | 统一操作入口及在线、离线、本机、Docker 调度和离线包制作逻辑。 |
 | `files/offline-bundle/` | 离线包目录结构占位符。 |
 | `scripts/` | 本地和 CI 共用的检查脚本。 |
 | `.github/` | GitHub Actions 和依赖更新配置。 |

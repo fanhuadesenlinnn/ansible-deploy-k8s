@@ -27,6 +27,30 @@ Ansible 控制端：
 - 主机名、IP 地址和节点间网络已经配置完成
 - 多控制平面集群已经准备好负载均衡器或虚拟 IP
 
+## 统一操作入口
+
+推荐通过仓库根目录的 `ops.sh` 使用项目。不传参数时显示中文交互菜单：
+
+```bash
+./ops.sh
+```
+
+同一个入口可以组合本机或 Docker 执行环境，以及在线或离线安装模式：
+
+```bash
+# 使用本机 Ansible 在线部署
+./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor local --mode online
+
+# 使用 Docker 中的 Ansible 在线部署
+./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online
+
+# 先查看实际命令，不连接或修改节点
+./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online --plan
+```
+
+`ops.sh` 只是安全、统一的调度入口，底层仍调用现有 Playbook；它不会改变 Inventory 中定义的集群版本、网段、
+节点地址或容器运行时。
+
 ## 快速开始
 
 ### 1. 安装控制端依赖
@@ -117,7 +141,27 @@ sudo crictl logs <容器 ID>
 
 ### 离线安装
 
-离线包支持从 Ansible 控制端复制，也可以由所有节点通过 HTTP 下载。目录结构和配置方式请参阅
+在联网且安装了 Docker 的机器上，可以生成与目标系统和架构匹配的离线包：
+
+```bash
+./ops.sh offline-build \
+  --distro ubuntu \
+  --release 24.04 \
+  --arch amd64 \
+  --kubernetes-version 1.36.3
+```
+
+随后使用本机 Ansible 或 Docker 控制端安装：
+
+```bash
+./ops.sh deploy \
+  -i inventories/my-cluster/hosts.yml \
+  --executor docker \
+  --mode offline \
+  --bundle dist/offline/k8s-1.36.3-ubuntu-24.04-amd64
+```
+
+离线包也可以由所有节点通过 HTTP 下载。支持范围、目录结构和自定义 CNI 方法请参阅
 [离线安装说明](docs/offline-installation.md)。
 
 ### 重置集群
