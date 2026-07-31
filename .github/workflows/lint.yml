@@ -12,15 +12,20 @@ permissions:
 
 jobs:
   ansible:
-    name: Ansible 检查
+    name: Ansible 检查（Python ${{ matrix.python-version }}）
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 同时覆盖 README 声明的最低版本和容器化控制端使用的 Python 版本。
+        python-version: ["3.10", "3.12"]
     steps:
       - name: 检出代码
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - name: 配置 Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: 安装开发依赖
         run: pip install -r requirements-dev.txt
@@ -45,6 +50,8 @@ jobs:
       - name: 检查 Docker Compose 配置
         run: docker compose -f docker/compose.yml config --quiet
       - name: 构建容器化 Ansible 控制端
+        if: matrix.python-version == '3.12'
         run: docker compose -f docker/compose.yml build ansible
       - name: 验证容器内 Ansible 环境
+        if: matrix.python-version == '3.12'
         run: docker compose -f docker/compose.yml run --rm -T ansible ansible --version

@@ -11,3 +11,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # ansible-core 2.20+ 要求控制端 Python 3.12+；项目目前仍承诺支持 Python 3.10。
+    # 提升 Python 最低版本时，应同步移除此规则并重新验证 Playbook。
+    ignore:
+      - dependency-name: ansible-core
+        versions:
+          - ">=2.20"
