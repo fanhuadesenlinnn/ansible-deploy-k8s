@@ -1,5 +1,5 @@
 ---
-- name: Create Kubernetes apt keyring directory
+- name: 创建 Kubernetes apt 密钥环目录
   ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
@@ -8,7 +8,7 @@
     mode: "0755"
   when: install_mode == 'online'
 
-- name: Download Kubernetes repository key
+- name: 下载 Kubernetes 软件源密钥
   ansible.builtin.get_url:
     url: "{{ kubernetes_apt_key_url }}"
     dest: /etc/apt/keyrings/kubernetes.asc
@@ -18,7 +18,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Configure Kubernetes repository
+- name: 配置 Kubernetes 软件源
   ansible.builtin.apt_repository:
     repo: "{{ kubernetes_apt_repository }}"
     filename: kubernetes
@@ -27,7 +27,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Install pinned Kubernetes packages
+- name: 安装固定版本的 Kubernetes 软件包
   ansible.builtin.apt:
     name:
       - "kubeadm={{ kubernetes_package_version }}"
@@ -39,7 +39,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Verify Kubernetes commands are installed
+- name: 验证 Kubernetes 命令已安装
   ansible.builtin.command: "{{ item }}"
   loop:
     - kubeadm version -o short
@@ -47,7 +47,7 @@
     - kubectl version --client
   changed_when: false
 
-- name: Hold Kubernetes package versions
+- name: 锁定 Kubernetes 软件包版本
   ansible.builtin.dpkg_selections:
     name: "{{ item }}"
     selection: hold
@@ -56,7 +56,7 @@
     - kubectl
     - kubelet
 
-- name: Enable kubelet
+- name: 启用 kubelet
   ansible.builtin.service:
     name: kubelet
     enabled: true

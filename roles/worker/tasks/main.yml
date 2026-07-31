@@ -1,10 +1,10 @@
 ---
-- name: Check whether this worker already joined
+- name: 检查当前工作节点是否已加入集群
   ansible.builtin.stat:
     path: /etc/kubernetes/kubelet.conf
   register: worker_kubelet_conf
 
-- name: Join this worker to the cluster
+- name: 将当前工作节点加入集群
   ansible.builtin.command: >-
     {{ hostvars[groups['kube_control_plane'][0]].kubernetes_worker_join_command }}
   register: worker_join_result
@@ -12,7 +12,7 @@
   no_log: true
   when: not worker_kubelet_conf.stat.exists
 
-- name: Ensure kubelet is running
+- name: 确保 kubelet 正在运行
   ansible.builtin.service:
     name: kubelet
     state: started

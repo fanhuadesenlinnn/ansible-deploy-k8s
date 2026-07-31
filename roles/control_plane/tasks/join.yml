@@ -1,10 +1,10 @@
 ---
-- name: Check whether this control-plane node already joined
+- name: 检查当前控制平面节点是否已加入集群
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf
   register: secondary_admin_conf
 
-- name: Join this control-plane node
+- name: 将当前控制平面节点加入集群
   ansible.builtin.command: >-
     {{ hostvars[groups['kube_control_plane'][0]].kubernetes_control_plane_join_command }}
   register: secondary_control_plane_join
@@ -12,7 +12,7 @@
   no_log: true
   when: not secondary_admin_conf.stat.exists
 
-- name: Create root kubeconfig directory on this control-plane node
+- name: 在当前控制平面节点创建 root kubeconfig 目录
   ansible.builtin.file:
     path: /root/.kube
     state: directory
@@ -20,7 +20,7 @@
     group: root
     mode: "0700"
 
-- name: Install root kubeconfig on this control-plane node
+- name: 在当前控制平面节点安装 root kubeconfig
   ansible.builtin.copy:
     src: /etc/kubernetes/admin.conf
     dest: /root/.kube/config

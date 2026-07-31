@@ -1,5 +1,5 @@
 ---
-- name: Create apt keyring directory for CRI-O
+- name: 创建 CRI-O apt 密钥环目录
   ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
@@ -8,7 +8,7 @@
     mode: "0755"
   when: install_mode == 'online'
 
-- name: Download CRI-O repository key
+- name: 下载 CRI-O 软件源密钥
   ansible.builtin.get_url:
     url: "{{ crio_apt_key_url }}"
     dest: /etc/apt/keyrings/cri-o.asc
@@ -18,7 +18,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Configure CRI-O repository
+- name: 配置 CRI-O 软件源
   ansible.builtin.apt_repository:
     repo: "{{ crio_apt_repository }}"
     filename: cri-o
@@ -27,7 +27,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Install CRI-O in online mode
+- name: 在在线模式下安装 CRI-O
   ansible.builtin.apt:
     name: cri-o
     state: present
@@ -35,18 +35,18 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Verify CRI-O is installed
+- name: 验证 CRI-O 已安装
   ansible.builtin.command: crio --version
   register: crio_version_result
   changed_when: false
 
-- name: Enable and start CRI-O
+- name: 启用并启动 CRI-O
   ansible.builtin.service:
     name: crio
     state: started
     enabled: true
 
-- name: Discover offline CRI-O images
+- name: 查找离线 CRI-O 镜像
   ansible.builtin.find:
     paths: "{{ offline_remote_dir }}/images"
     patterns: "*.tar"
@@ -54,14 +54,14 @@
   register: offline_crio_image_archives
   when: install_mode == 'offline'
 
-- name: Verify podman is available for offline CRI-O image import
+- name: 验证 podman 可用于导入离线 CRI-O 镜像
   ansible.builtin.command: podman --version
   changed_when: false
   when:
     - install_mode == 'offline'
     - offline_crio_image_archives.matched | default(0) | int > 0
 
-- name: Import offline images for CRI-O
+- name: 为 CRI-O 导入离线镜像
   ansible.builtin.command:
     argv:
       - podman

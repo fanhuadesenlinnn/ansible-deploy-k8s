@@ -1,5 +1,5 @@
 ---
-- name: Create local kubeconfig output directory
+- name: 创建本地 kubeconfig 输出目录
   ansible.builtin.file:
     path: "{{ kubeconfig_output_dir }}"
     state: directory
@@ -7,20 +7,20 @@
   delegate_to: localhost
   become: false
 
-- name: Fetch administrator kubeconfig
+- name: 获取管理员 kubeconfig
   ansible.builtin.fetch:
     src: /etc/kubernetes/admin.conf
     dest: "{{ kubeconfig_output_file }}"
     flat: true
 
-- name: Restrict local kubeconfig permissions
+- name: 限制本地 kubeconfig 权限
   ansible.builtin.file:
     path: "{{ kubeconfig_output_file }}"
     mode: "0600"
   delegate_to: localhost
   become: false
 
-- name: Override the exported API server when requested
+- name: 按需替换已导出的 API Server 地址
   ansible.builtin.replace:
     path: "{{ kubeconfig_output_file }}"
     regexp: '^\s*server:\s+.*$'

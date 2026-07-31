@@ -1,5 +1,5 @@
 ---
-- name: Reset Kubernetes hosts
+- name: 重置 Kubernetes 主机
   hosts: k8s_cluster
   become: true
   gather_facts: false
@@ -7,17 +7,18 @@
     kubernetes_reset_confirm: false
     kubernetes_reset_cluster_name: ""
   tasks:
-    - name: Require explicit destructive-operation confirmation
+    - name: 要求明确确认破坏性操作
       ansible.builtin.assert:
         that:
           - kubernetes_reset_confirm | bool
           - kubernetes_reset_cluster_name == cluster_name
         fail_msg: >-
-          Reset is destructive. After verifying the selected inventory and hosts,
-          run again with -e kubernetes_reset_confirm=true and
+          重置操作具有破坏性。确认所选 Inventory 和主机无误后，请使用
+          -e kubernetes_reset_confirm=true 和
           -e kubernetes_reset_cluster_name={{ cluster_name }}.
+        success_msg: 已确认重置目标和破坏性操作。
 
-    - name: Reset kubeadm state
+    - name: 重置 kubeadm 状态
       ansible.builtin.command:
         argv:
           - kubeadm
@@ -28,7 +29,7 @@
       register: kubeadm_reset_result
       changed_when: kubeadm_reset_result.rc == 0
 
-    - name: Remove CNI configuration
+    - name: 删除 CNI 配置
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -37,22 +38,22 @@
         - /var/lib/cni
         - /var/lib/kubelet/pki
 
-    - name: Remove Kubernetes configuration
+    - name: 删除 Kubernetes 配置
       ansible.builtin.file:
         path: /etc/kubernetes
         state: absent
 
-    - name: Remove the root kubeconfig created by this project
+    - name: 删除本项目创建的 root kubeconfig
       ansible.builtin.file:
         path: /root/.kube/config
         state: absent
 
-    - name: Restart the container runtime
+    - name: 重启容器运行时
       ansible.builtin.service:
         name: "{{ container_runtime_service }}"
         state: restarted
 
-    - name: Remove the exported administrator kubeconfig
+    - name: 删除已导出的管理员 kubeconfig
       ansible.builtin.file:
         path: "{{ kubeconfig_output_file }}"
         state: absent

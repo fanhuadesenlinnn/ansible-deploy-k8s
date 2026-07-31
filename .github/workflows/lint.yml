@@ -1,5 +1,5 @@
 ---
-name: lint
+name: 代码检查
 
 "on":
   pull_request:
@@ -11,19 +11,31 @@ permissions:
 
 jobs:
   ansible:
+    name: Ansible 检查
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
+      - name: 检出代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - name: 配置 Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements-dev.txt
-      - run: ansible-galaxy collection install -r requirements.yml
-      - run: yamllint .
-      - run: ansible-lint
-      - run: bash scripts/check-no-private-data.sh
-      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/site.yml --syntax-check
-      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/addons.yml --syntax-check
-      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/reset.yml --syntax-check
-      - run: ansible-playbook -i inventories/example/hosts.yml playbooks/artifact-server.yml --syntax-check
+      - name: 安装开发依赖
+        run: pip install -r requirements-dev.txt
+      - name: 安装 Ansible Collection
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: 检查 YAML 格式
+        run: yamllint .
+      - name: 检查 Ansible 内容
+        run: ansible-lint
+      - name: 检查敏感信息
+        run: bash scripts/check-no-private-data.sh
+      - name: 检查集群安装 Playbook 语法
+        run: ansible-playbook -i inventories/example/hosts.yml playbooks/site.yml --syntax-check
+      - name: 检查附加组件 Playbook 语法
+        run: ansible-playbook -i inventories/example/hosts.yml playbooks/addons.yml --syntax-check
+      - name: 检查集群重置 Playbook 语法
+        run: ansible-playbook -i inventories/example/hosts.yml playbooks/reset.yml --syntax-check
+      - name: 检查制品服务器 Playbook 语法
+        run: ansible-playbook -i inventories/example/hosts.yml playbooks/artifact-server.yml --syntax-check

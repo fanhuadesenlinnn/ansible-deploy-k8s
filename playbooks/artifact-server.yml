@@ -1,5 +1,5 @@
 ---
-- name: Start an optional dufs artifact server
+- name: 启动可选的 dufs 制品服务器
   hosts: "kube_control_plane[0]"
   become: true
   gather_facts: true

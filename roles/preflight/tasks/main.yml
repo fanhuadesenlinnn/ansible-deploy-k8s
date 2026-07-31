@@ -1,18 +1,20 @@
 ---
-- name: Validate supported operating system family
+- name: 验证操作系统系列是否受支持
   ansible.builtin.assert:
     that:
       - ansible_os_family == 'Debian'
       - ansible_service_mgr == 'systemd'
-    fail_msg: This release supports Debian/Ubuntu hosts using systemd and apt.
+    fail_msg: 当前版本仅支持使用 systemd 和 apt 的 Debian/Ubuntu 主机。
+    success_msg: 操作系统系列和服务管理器受支持。
 
-- name: Validate supported CPU architecture
+- name: 验证 CPU 架构是否受支持
   ansible.builtin.assert:
     that:
       - ansible_architecture in ['x86_64', 'aarch64']
-    fail_msg: "Unsupported architecture: {{ ansible_architecture }}"
+    fail_msg: "不支持的架构：{{ ansible_architecture }}"
+    success_msg: CPU 架构受支持。
 
-- name: Validate installation variables
+- name: 验证安装变量
   ansible.builtin.assert:
     that:
       - container_runtime in ['containerd', 'crio']
@@ -38,12 +40,12 @@
         (cni_manifest_url | length > 0 and
         cni_manifest_checksum | default('') | length > 0)
     fail_msg: >-
-      Review the version, runtime, install mode, and cluster CIDR variables.
-      crictl must match the Kubernetes major/minor version. Online CNI downloads
-      require a URL and checksum. This project requires Kubernetes 1.31+ because
-      it uses kubeadm v1beta4.
+      请检查版本、容器运行时、安装模式和集群 CIDR 变量。crictl 必须与 Kubernetes
+      的主版本号和次版本号一致。在线下载 CNI 时必须提供 URL 和校验和。本项目使用
+      kubeadm v1beta4，因此要求 Kubernetes 1.31 或更高版本。
+    success_msg: 安装变量验证通过。
 
-- name: Inspect existing Kubernetes node state
+- name: 检查现有 Kubernetes 节点状态
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -51,7 +53,7 @@
     - /etc/kubernetes/kubelet.conf
   register: kubernetes_existing_state_files
 
-- name: Read the installed kubelet version on configured nodes
+- name: 读取已配置节点上的 kubelet 版本
   ansible.builtin.command: kubelet --version
   register: kubernetes_installed_kubelet_version
   changed_when: false
@@ -62,7 +64,7 @@
     | list
     | length > 0
 
-- name: Inspect the configured kubelet runtime endpoint
+- name: 检查 kubelet 已配置的运行时端点
   ansible.builtin.stat:
     path: /var/lib/kubelet/instance-config.yaml
   register: kubernetes_kubelet_instance_config
@@ -72,26 +74,27 @@
     | list
     | length > 0
 
-- name: Read the configured kubelet runtime endpoint
+- name: 读取 kubelet 已配置的运行时端点
   ansible.builtin.slurp:
     src: /var/lib/kubelet/instance-config.yaml
   register: kubernetes_kubelet_instance_config_content
   when:
     - kubernetes_kubelet_instance_config.stat.exists | default(false)
 
-- name: Refuse an implicit container runtime migration
+- name: 拒绝隐式迁移容器运行时
   ansible.builtin.assert:
     that:
       - >-
         kubernetes_cri_socket in
         (kubernetes_kubelet_instance_config_content.content | b64decode)
     fail_msg: >-
-      This node is configured for a different CRI socket. Changing
-      container_runtime on an existing node requires a dedicated migration.
+      此节点配置了不同的 CRI Socket。在现有节点上修改 container_runtime
+      必须执行专门的迁移流程。
+    success_msg: 容器运行时配置与现有节点一致。
   when:
     - kubernetes_kubelet_instance_config.stat.exists | default(false)
 
-- name: Refuse implicit Kubernetes upgrades through the install playbook
+- name: 拒绝通过安装 Playbook 隐式升级 Kubernetes
   ansible.builtin.assert:
     that:
       - kubernetes_installed_kubelet_version.rc == 0
@@ -100,25 +103,27 @@
         | regex_search('v[0-9]+\.[0-9]+\.[0-9]+')
         == 'v' ~ kubernetes_version
     fail_msg: >-
-      This node already belongs to a Kubernetes cluster, but its kubelet version
-      differs from kubernetes_version. site.yml does not perform kubeadm upgrades;
-      use a dedicated, version-aware upgrade procedure instead.
+      此节点已属于 Kubernetes 集群，但 kubelet 版本与 kubernetes_version 不一致。
+      site.yml 不执行 kubeadm 升级，请改用感知版本的专用升级流程。
+    success_msg: kubelet 版本与目标 Kubernetes 版本一致。
   when: >-
     kubernetes_existing_state_files.results
     | selectattr('stat.exists')
     | list
     | length > 0
 
-- name: Require a stable endpoint for a highly available control plane
+- name: 要求高可用控制平面使用稳定端点
   ansible.builtin.assert:
     that:
       - control_plane_endpoint | length > 0
-    fail_msg: Multiple control-plane nodes require control_plane_endpoint to reference a load balancer or VIP.
+    fail_msg: 多控制平面节点要求 control_plane_endpoint 指向负载均衡器或 VIP。
+    success_msg: 高可用控制平面端点已配置。
   when: groups['kube_control_plane'] | length > 1
 
-- name: Check minimum control-plane memory
+- name: 检查控制平面节点的最低内存
   ansible.builtin.assert:
     that:
       - ansible_memtotal_mb >= 1700
-    fail_msg: A control-plane node requires approximately 2 GiB of memory or more.
+    fail_msg: 控制平面节点需要约 2 GiB 或更多内存。
+    success_msg: 控制平面节点内存满足要求。
   when: inventory_hostname in groups['kube_control_plane']

@@ -1,17 +1,18 @@
 ---
-- name: Map host architecture to the crictl release architecture
+- name: 将主机架构映射为 crictl 发布架构
   ansible.builtin.set_fact:
     crictl_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
 
-- name: Validate the online crictl release inputs
+- name: 验证在线 crictl 发布包参数
   ansible.builtin.assert:
     that:
       - crictl_download_url | length > 0
       - crictl_checksum | length > 0
-    fail_msg: Set crictl_download_url and crictl_checksum for the selected version and architecture.
+    fail_msg: 请为所选版本和架构设置 crictl_download_url 与 crictl_checksum。
+    success_msg: crictl 在线发布包参数有效。
   when: install_mode == 'online'
 
-- name: Create the crictl installation directory
+- name: 创建 crictl 安装目录
   ansible.builtin.file:
     path: "{{ crictl_install_dir }}"
     state: directory
@@ -19,7 +20,7 @@
     group: root
     mode: "0755"
 
-- name: Create the crictl configuration directory
+- name: 创建 crictl 配置目录
   ansible.builtin.file:
     path: "{{ crictl_config_dir }}"
     state: directory
@@ -27,7 +28,7 @@
     group: root
     mode: "0755"
 
-- name: Check the installed crictl version
+- name: 检查已安装的 crictl 版本
   ansible.builtin.command:
     argv:
       - "{{ crictl_install_path }}"
@@ -36,13 +37,13 @@
   changed_when: false
   failed_when: false
 
-- name: Determine whether crictl must be installed
+- name: 判断是否需要安装 crictl
   ansible.builtin.set_fact:
     crictl_needs_install: >-
       {{ crictl_installed_version.rc != 0 or
          crictl_version not in (crictl_installed_version.stdout | default('')) }}
 
-- name: Download the crictl release archive
+- name: 下载 crictl 发布归档
   ansible.builtin.get_url:
     url: "{{ crictl_download_url }}"
     dest: "/tmp/crictl-{{ crictl_version }}-linux-{{ crictl_arch }}.tar.gz"
@@ -55,7 +56,7 @@
     - install_mode == 'online'
     - crictl_needs_install | bool
 
-- name: Install crictl from the online release archive
+- name: 从在线发布归档安装 crictl
   ansible.builtin.unarchive:
     src: "/tmp/crictl-{{ crictl_version }}-linux-{{ crictl_arch }}.tar.gz"
     dest: "{{ crictl_install_dir }}"
@@ -69,7 +70,7 @@
     - install_mode == 'online'
     - crictl_needs_install | bool
 
-- name: Install crictl from the offline bundle
+- name: 从离线包安装 crictl
   ansible.builtin.copy:
     src: "{{ offline_remote_dir }}/bin/crictl"
     dest: "{{ crictl_install_path }}"
@@ -79,7 +80,7 @@
     mode: "0755"
   when: install_mode == 'offline'
 
-- name: Configure crictl for the selected container runtime
+- name: 为所选容器运行时配置 crictl
   ansible.builtin.template:
     src: crictl.yaml.j2
     dest: "{{ crictl_config_path }}"
@@ -87,7 +88,7 @@
     group: root
     mode: "0644"
 
-- name: Read the installed crictl version
+- name: 读取已安装的 crictl 版本
   ansible.builtin.command:
     argv:
       - "{{ crictl_install_path }}"
@@ -95,14 +96,15 @@
   register: crictl_version_result
   changed_when: false
 
-- name: Verify the requested crictl version is installed
+- name: 验证已安装指定的 crictl 版本
   ansible.builtin.assert:
     that:
       - crictl_version in crictl_version_result.stdout
     fail_msg: >-
-      Installed crictl does not match crictl_version={{ crictl_version }}.
+      已安装的 crictl 与 crictl_version={{ crictl_version }} 不一致。
+    success_msg: 已安装指定版本的 crictl。
 
-- name: Verify crictl can reach the container runtime
+- name: 验证 crictl 可以连接容器运行时
   ansible.builtin.command:
     argv:
       - "{{ crictl_install_path }}"

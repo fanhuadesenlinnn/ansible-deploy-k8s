@@ -1,5 +1,5 @@
 ---
-- name: Validate offline bundle source
+- name: 验证离线包来源
   ansible.builtin.assert:
     that:
       - (offline_bundle_path | length > 0) != (offline_bundle_url | length > 0)
@@ -7,11 +7,12 @@
         offline_bundle_url | length == 0 or
         offline_bundle_checksum | default('') | length > 0
     fail_msg: >-
-      Set exactly one of offline_bundle_path or offline_bundle_url in offline
-      mode, and provide offline_bundle_checksum for an HTTP archive.
+      离线模式下必须且只能设置 offline_bundle_path 或 offline_bundle_url 其中之一；
+      使用 HTTP 归档时还必须设置 offline_bundle_checksum。
+    success_msg: 离线包来源参数有效。
   when: install_mode == 'offline'
 
-- name: Create offline bundle directory
+- name: 创建离线包目录
   ansible.builtin.file:
     path: "{{ offline_remote_dir }}"
     state: directory
@@ -20,7 +21,7 @@
     mode: "0755"
   when: install_mode == 'offline'
 
-- name: Copy offline bundle from the Ansible controller
+- name: 从 Ansible 控制端复制离线包
   ansible.builtin.copy:
     src: "{{ offline_bundle_path }}/"
     dest: "{{ offline_remote_dir }}/"
@@ -31,7 +32,7 @@
     - install_mode == 'offline'
     - offline_bundle_path | length > 0
 
-- name: Download offline bundle archive
+- name: 下载离线包归档
   ansible.builtin.get_url:
     url: "{{ offline_bundle_url }}"
     dest: /tmp/ansible-install-k8s-offline-bundle.tar.gz
@@ -45,7 +46,7 @@
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
 
-- name: Remove stale content before extracting a changed archive
+- name: 在解压已变更的归档前删除旧内容
   ansible.builtin.file:
     path: "{{ offline_remote_dir }}/{{ item }}"
     state: absent
@@ -59,7 +60,7 @@
     - offline_bundle_url | length > 0
     - offline_bundle_download.changed
 
-- name: Extract offline bundle archive
+- name: 解压离线包归档
   ansible.builtin.unarchive:
     src: /tmp/ansible-install-k8s-offline-bundle.tar.gz
     dest: "{{ offline_remote_dir }}"
@@ -69,7 +70,7 @@
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
 
-- name: Inspect offline Debian packages
+- name: 检查离线 Debian 软件包
   ansible.builtin.find:
     paths: "{{ offline_remote_dir }}/packages"
     patterns: "*.deb"
@@ -77,7 +78,7 @@
   register: offline_deb_packages
   when: install_mode == 'offline'
 
-- name: Inspect offline container images
+- name: 检查离线容器镜像
   ansible.builtin.find:
     paths: "{{ offline_remote_dir }}/images"
     patterns: "*.tar"
@@ -85,13 +86,13 @@
   register: offline_bundle_images
   when: install_mode == 'offline'
 
-- name: Inspect the offline CNI manifest
+- name: 检查离线 CNI 清单
   ansible.builtin.stat:
     path: "{{ offline_remote_dir }}/manifests/{{ offline_cni_manifest }}"
   register: offline_bundle_cni_manifest
   when: install_mode == 'offline'
 
-- name: Inspect the offline crictl binary
+- name: 检查离线 crictl 二进制文件
   ansible.builtin.stat:
     path: "{{ offline_remote_dir }}/bin/crictl"
   register: offline_bundle_crictl
@@ -99,7 +100,7 @@
     - install_mode == 'offline'
     - install_crictl | bool
 
-- name: Require a complete offline bundle
+- name: 确认离线包内容完整
   ansible.builtin.assert:
     that:
       - offline_deb_packages.matched | int > 0
@@ -139,7 +140,8 @@
         (offline_bundle_crictl.stat.exists | default(false) and
         offline_bundle_crictl.stat.isreg | default(false))
     fail_msg: >-
-      The offline bundle must include kubeadm, kubelet, kubectl, the selected
-      runtime and all dependencies under packages/, at least one images/*.tar,
-      the configured CNI manifest under manifests/, and bin/crictl when enabled.
+      离线包必须在 packages/ 中包含 kubeadm、kubelet、kubectl、所选容器运行时
+      及其全部依赖，至少包含一个 images/*.tar、manifests/ 下配置的 CNI 清单；
+      启用 crictl 时还必须包含 bin/crictl。
+    success_msg: 离线包内容完整。
   when: install_mode == 'offline'

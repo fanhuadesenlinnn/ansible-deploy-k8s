@@ -1,5 +1,5 @@
-# Offline bundle placeholder
+# 离线包占位目录
 
-Do not commit generated packages, binaries, container images, credentials, or kubeconfig files here.
+请勿在此提交生成的软件包、二进制文件、容器镜像、凭据或 kubeconfig 文件。
 
-See `docs/offline-installation.md` for the supported bundle structure.
+支持的离线包结构请参阅 `docs/offline-installation.md`。

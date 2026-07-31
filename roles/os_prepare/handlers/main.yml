@@ -1,4 +1,4 @@
 ---
-- name: Apply sysctl settings
+- name: 应用 sysctl 参数
   ansible.builtin.command: sysctl --system
   changed_when: true

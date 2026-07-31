@@ -1,13 +1,13 @@
 ---
-- name: Configure containerd runtime
+- name: 配置 containerd 运行时
   ansible.builtin.include_tasks: containerd.yml
   when: container_runtime == 'containerd'
 
-- name: Configure CRI-O runtime
+- name: 配置 CRI-O 运行时
   ansible.builtin.include_tasks: crio.yml
   when: container_runtime == 'crio'
 
-- name: Create container runtime systemd override directory
+- name: 创建容器运行时 systemd 覆盖配置目录
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ container_runtime_service }}.service.d"
     state: directory
@@ -16,19 +16,19 @@
     mode: "0755"
   when: proxy_env | length > 0
 
-- name: Configure the container runtime proxy environment
+- name: 配置容器运行时代理环境
   ansible.builtin.template:
     src: proxy.conf.j2
     dest: "/etc/systemd/system/{{ container_runtime_service }}.service.d/proxy.conf"
     owner: root
     group: root
     mode: "0644"
-  notify: "{{ 'Restart containerd' if container_runtime == 'containerd' else 'Restart CRI-O' }}"
+  notify: "{{ '重启 containerd' if container_runtime == 'containerd' else '重启 CRI-O' }}"
   when: proxy_env | length > 0
 
-- name: Remove an obsolete container runtime proxy override
+- name: 删除过期的容器运行时代理覆盖配置
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ container_runtime_service }}.service.d/proxy.conf"
     state: absent
-  notify: "{{ 'Restart containerd' if container_runtime == 'containerd' else 'Restart CRI-O' }}"
+  notify: "{{ '重启 containerd' if container_runtime == 'containerd' else '重启 CRI-O' }}"
   when: proxy_env | length == 0

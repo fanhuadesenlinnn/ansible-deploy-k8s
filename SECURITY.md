@@ -1,14 +1,15 @@
-# Security policy
+# 安全策略
 
-Do not commit SSH private keys, kubeconfig files, bootstrap tokens, registry passwords, or production inventory data.
+请勿提交 SSH 私钥、kubeconfig 文件、引导令牌、镜像仓库密码或生产环境 Inventory 数据。
 
-Use Ansible Vault, an external secret manager, or CI-provided secrets for sensitive variables. Generated kubeconfig files are
-written under `artifacts/`, which is ignored by Git.
+敏感变量应使用 Ansible Vault、外部密钥管理器或 CI 提供的 Secret。生成的 kubeconfig 文件会写入
+`artifacts/`，该目录已被 Git 忽略。
 
-Non-example inventory directories are ignored by Git. Keep checksums configured for downloaded manifests, binaries, and
-offline bundle archives; update the corresponding checksum whenever a custom URL or version is selected.
+除示例以外的 Inventory 目录均会被 Git 忽略。下载清单、二进制文件和离线归档时必须配置校验和；使用
+自定义 URL 或版本时，请同步更新对应的校验和。
 
-The destructive reset playbook requires both `kubernetes_reset_confirm=true` and the exact value of `cluster_name`. It
-removes the role-managed root and exported kubeconfig files, but kubeadm does not clean iptables, nftables, or IPVS rules.
+破坏性的重置 Playbook 要求同时提供 `kubernetes_reset_confirm=true` 和与 `cluster_name` 完全一致的值。
+它会删除本项目管理的 root kubeconfig 和导出到控制端的 kubeconfig，但 kubeadm 不会清理 iptables、
+nftables 或 IPVS 规则。
 
-Report a vulnerability privately through GitHub Security Advisories rather than opening a public issue.
+发现安全漏洞时，请通过 GitHub Security Advisories 私下报告，不要创建公开 Issue。

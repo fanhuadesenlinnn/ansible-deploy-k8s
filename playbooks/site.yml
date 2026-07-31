@@ -1,9 +1,9 @@
 ---
-- name: Validate inventory
+- name: 验证 Inventory
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Require at least one control-plane host
+    - name: 确认至少定义了一台控制平面主机
       ansible.builtin.assert:
         that:
           - groups['kube_control_plane'] | default([]) | length > 0
@@ -17,10 +17,11 @@
             | difference(groups['k8s_cluster'] | default([]))
             | length == 0
         fail_msg: >-
-          Inventory must define kube_control_plane and k8s_cluster, and every
-          control-plane and worker host must also belong to k8s_cluster.
+          Inventory 必须定义 kube_control_plane 和 k8s_cluster，且每台控制平面主机和
+          工作节点都必须同时属于 k8s_cluster。
+        success_msg: Inventory 结构验证通过。
 
-    - name: Validate cluster network CIDRs
+    - name: 验证集群网络 CIDR
       ansible.builtin.command:
         argv:
           - "{{ ansible_playbook_python }}"
@@ -29,7 +30,7 @@
             import ipaddress, sys;
             pod = ipaddress.ip_network(sys.argv[1]);
             service = ipaddress.ip_network(sys.argv[2]);
-            sys.exit('pod_network_cidr and service_cidr must not overlap'
+            sys.exit('pod_network_cidr 与 service_cidr 不能重叠'
             if pod.overlaps(service) else 0)
           - "{{ pod_network_cidr }}"
           - "{{ service_cidr }}"
@@ -37,7 +38,7 @@
       check_mode: false
       become: false
 
-- name: Prepare Kubernetes hosts
+- name: 准备 Kubernetes 主机
   hosts: k8s_cluster
   become: true
   gather_facts: true
@@ -50,7 +51,7 @@
       when: install_crictl | bool
     - kubernetes_packages
 
-- name: Initialize or extend the control plane
+- name: 初始化或扩展控制平面
   hosts: kube_control_plane
   become: true
   gather_facts: true
@@ -58,33 +59,33 @@
   roles:
     - control_plane
 
-- name: Install the cluster network
+- name: 安装集群网络
   hosts: "kube_control_plane[0]"
   become: true
   gather_facts: false
   roles:
     - cni
 
-- name: Join worker nodes
+- name: 加入工作节点
   hosts: kube_workers
   become: true
   gather_facts: true
   roles:
     - worker
 
-- name: Export administrator kubeconfig
+- name: 导出管理员 kubeconfig
   hosts: "kube_control_plane[0]"
   become: true
   gather_facts: false
   roles:
     - kubeconfig
 
-- name: Verify all registered nodes become ready
+- name: 验证所有已注册节点进入就绪状态
   hosts: "kube_control_plane[0]"
   become: true
   gather_facts: false
   tasks:
-    - name: Wait for every node to report Ready
+    - name: 等待所有节点报告 Ready 状态
       ansible.builtin.command:
         argv:
           - kubectl

@@ -1,16 +1,17 @@
 ---
-- name: Map host architecture to dufs release architecture
+- name: 将主机架构映射为 dufs 发布架构
   ansible.builtin.set_fact:
     dufs_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'aarch64'}[ansible_architecture] }}"
 
-- name: Require a checksum for online dufs downloads
+- name: 要求为在线下载的 dufs 配置校验和
   ansible.builtin.assert:
     that:
       - dufs_checksum | length > 0
-    fail_msg: Set dufs_checksum to the SHA-256 digest of dufs_download_url.
+    fail_msg: 请将 dufs_checksum 设置为 dufs_download_url 对应的 SHA-256 摘要。
+    success_msg: dufs 下载校验和已配置。
   when: install_mode == 'online'
 
-- name: Ensure the artifact root exists
+- name: 确保制品根目录存在
   ansible.builtin.file:
     path: "{{ dufs_root }}"
     state: directory
@@ -18,7 +19,7 @@
     group: root
     mode: "0755"
 
-- name: Download dufs archive in online mode
+- name: 在在线模式下下载 dufs 归档
   ansible.builtin.get_url:
     url: "{{ dufs_download_url }}"
     dest: "/tmp/dufs-{{ dufs_version }}.tar.gz"
@@ -29,7 +30,7 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Extract dufs in online mode
+- name: 在在线模式下解压 dufs
   ansible.builtin.unarchive:
     src: "/tmp/dufs-{{ dufs_version }}.tar.gz"
     dest: /usr/local/bin
@@ -41,7 +42,7 @@
     mode: "0755"
   when: install_mode == 'online'
 
-- name: Install dufs from the offline bundle
+- name: 从离线包安装 dufs
   ansible.builtin.copy:
     src: "{{ offline_remote_dir }}/bin/dufs"
     dest: /usr/local/bin/dufs
@@ -51,16 +52,16 @@
     mode: "0755"
   when: install_mode == 'offline'
 
-- name: Install dufs systemd unit
+- name: 安装 dufs systemd 单元
   ansible.builtin.template:
     src: dufs.service.j2
     dest: /etc/systemd/system/dufs.service
     owner: root
     group: root
     mode: "0644"
-  notify: Restart dufs
+  notify: 重启 dufs
 
-- name: Enable and start dufs
+- name: 启用并启动 dufs
   ansible.builtin.systemd_service:
     name: dufs
     state: started

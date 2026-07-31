@@ -1,5 +1,5 @@
 ---
-- name: Install containerd in online mode
+- name: 在在线模式下安装 containerd
   ansible.builtin.apt:
     name: "{{ containerd_package }}"
     state: present
@@ -7,12 +7,12 @@
   environment: "{{ proxy_env }}"
   when: install_mode == 'online'
 
-- name: Verify containerd is installed
+- name: 验证 containerd 已安装
   ansible.builtin.command: containerd --version
   register: containerd_version_result
   changed_when: false
 
-- name: Create containerd configuration directory
+- name: 创建 containerd 配置目录
   ansible.builtin.file:
     path: /etc/containerd
     state: directory
@@ -20,43 +20,43 @@
     group: root
     mode: "0755"
 
-- name: Check for an existing containerd configuration
+- name: 检查现有 containerd 配置
   ansible.builtin.stat:
     path: /etc/containerd/config.toml
   register: containerd_config
 
-- name: Generate containerd default configuration
+- name: 生成 containerd 默认配置
   ansible.builtin.command: containerd config default
   register: containerd_default_config
   changed_when: false
   when: not containerd_config.stat.exists
 
-- name: Install containerd default configuration
+- name: 安装 containerd 默认配置
   ansible.builtin.copy:
     content: "{{ containerd_default_config.stdout }}\n"
     dest: /etc/containerd/config.toml
     owner: root
     group: root
     mode: "0644"
-  notify: Restart containerd
+  notify: 重启 containerd
   when: not containerd_config.stat.exists
 
-- name: Use the systemd cgroup driver in containerd
+- name: 在 containerd 中使用 systemd cgroup 驱动
   ansible.builtin.replace:
     path: /etc/containerd/config.toml
     regexp: 'SystemdCgroup\s*=\s*false'
     replace: 'SystemdCgroup = true'
-  notify: Restart containerd
+  notify: 重启 containerd
 
-- name: Enable containerd registry host configuration
+- name: 启用 containerd 镜像仓库主机配置
   ansible.builtin.replace:
     path: /etc/containerd/config.toml
     regexp: 'config_path\s*=\s*""'
     replace: 'config_path = "/etc/containerd/certs.d"'
-  notify: Restart containerd
+  notify: 重启 containerd
   when: registry_mirrors | length > 0
 
-- name: Create containerd registry configuration directories
+- name: 创建 containerd 镜像仓库配置目录
   ansible.builtin.file:
     path: "/etc/containerd/certs.d/{{ item.key }}"
     state: directory
@@ -66,7 +66,7 @@
   loop: "{{ registry_mirrors | dict2items }}"
   when: registry_mirrors | length > 0
 
-- name: Configure containerd registry endpoints
+- name: 配置 containerd 镜像仓库端点
   ansible.builtin.template:
     src: hosts.toml.j2
     dest: "/etc/containerd/certs.d/{{ item.key }}/hosts.toml"
@@ -74,19 +74,19 @@
     group: root
     mode: "0644"
   loop: "{{ registry_mirrors | dict2items }}"
-  notify: Restart containerd
+  notify: 重启 containerd
   when: registry_mirrors | length > 0
 
-- name: Enable and start containerd
+- name: 启用并启动 containerd
   ansible.builtin.service:
     name: containerd
     state: started
     enabled: true
 
-- name: Apply pending containerd handlers
+- name: 执行待处理的 containerd Handler
   ansible.builtin.meta: flush_handlers
 
-- name: Discover offline container images
+- name: 查找离线容器镜像
   ansible.builtin.find:
     paths: "{{ offline_remote_dir }}/images"
     patterns: "*.tar"
@@ -94,7 +94,7 @@
   register: offline_image_archives
   when: install_mode == 'offline'
 
-- name: Import offline images into containerd
+- name: 将离线镜像导入 containerd
   ansible.builtin.command:
     argv:
       - ctr

@@ -1,19 +1,19 @@
 ---
-- name: Resolve the advertised control-plane host
+- name: 解析对外发布的控制平面主机
   ansible.builtin.set_fact:
     resolved_control_plane_host: >-
       {{ control_plane_endpoint.rsplit(':', 1)[0]
          if control_plane_endpoint | length > 0
          else ansible_host | default(ansible_default_ipv4.address) }}
 
-- name: Resolve the complete control-plane endpoint
+- name: 解析完整的控制平面端点
   ansible.builtin.set_fact:
     resolved_control_plane_endpoint: >-
       {{ control_plane_endpoint
          if control_plane_endpoint | length > 0
          else resolved_control_plane_host ~ ':' ~ (api_server_bind_port | string) }}
 
-- name: Create kubeadm configuration directory
+- name: 创建 kubeadm 配置目录
   ansible.builtin.file:
     path: /etc/kubernetes
     state: directory
@@ -21,7 +21,7 @@
     group: root
     mode: "0755"
 
-- name: Render kubeadm initialization configuration
+- name: 渲染 kubeadm 初始化配置
   ansible.builtin.template:
     src: kubeadm-config.yaml.j2
     dest: /etc/kubernetes/kubeadm-init.yaml
@@ -29,12 +29,12 @@
     group: root
     mode: "0600"
 
-- name: Check whether the control plane is initialized
+- name: 检查控制平面是否已初始化
   ansible.builtin.stat:
     path: /etc/kubernetes/admin.conf
   register: kubernetes_admin_conf
 
-- name: Initialize the Kubernetes control plane
+- name: 初始化 Kubernetes 控制平面
   ansible.builtin.command:
     argv: "{{ ['kubeadm', 'init', '--config', '/etc/kubernetes/kubeadm-init.yaml'] + kubeadm_extra_args }}"
   environment: "{{ proxy_env }}"
@@ -42,7 +42,7 @@
   changed_when: kubeadm_init_result.rc == 0
   when: not kubernetes_admin_conf.stat.exists
 
-- name: Create root kubeconfig directory
+- name: 创建 root kubeconfig 目录
   ansible.builtin.file:
     path: /root/.kube
     state: directory
@@ -50,7 +50,7 @@
     group: root
     mode: "0700"
 
-- name: Install root kubeconfig
+- name: 安装 root kubeconfig
   ansible.builtin.copy:
     src: /etc/kubernetes/admin.conf
     dest: /root/.kube/config
@@ -59,7 +59,7 @@
     group: root
     mode: "0600"
 
-- name: Wait for the Kubernetes API
+- name: 等待 Kubernetes API 就绪
   ansible.builtin.command:
     argv:
       - kubectl
@@ -72,26 +72,26 @@
   delay: 5
   until: kubernetes_api_ready.rc == 0
 
-- name: Generate a current worker join command
+- name: 生成当前有效的工作节点加入命令
   ansible.builtin.command: kubeadm token create --print-join-command
   register: kubeadm_worker_join
   changed_when: false
   no_log: true
 
-- name: Publish the worker join command for later plays
+- name: 发布工作节点加入命令供后续 Play 使用
   ansible.builtin.set_fact:
     kubernetes_worker_join_command: >-
       {{ kubeadm_worker_join.stdout }} --cri-socket {{ kubernetes_cri_socket }}
   no_log: true
 
-- name: Upload control-plane certificates
+- name: 上传控制平面证书
   ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
   register: kubeadm_upload_certs
   changed_when: true
   no_log: true
   when: groups['kube_control_plane'] | length > 1
 
-- name: Publish the additional control-plane join command
+- name: 发布额外控制平面节点的加入命令
   ansible.builtin.set_fact:
     kubernetes_control_plane_join_command: >-
       {{ kubeadm_worker_join.stdout }} --control-plane

@@ -1,5 +1,5 @@
 ---
-- name: Install optional Kubernetes add-ons
+- name: 安装可选的 Kubernetes 附加组件
   hosts: "kube_control_plane[0]"
   become: true
   gather_facts: false

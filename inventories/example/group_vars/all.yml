@@ -1,5 +1,5 @@
 ---
-# Cluster identity and Kubernetes packages.
+# 集群标识与 Kubernetes 软件包。
 cluster_name: demo
 kubernetes_version: "1.36.3"
 kubernetes_version_minor: >-
@@ -12,7 +12,7 @@ kubernetes_apt_key_url: >-
   https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version_minor }}/deb/Release.key
 kubernetes_image_repository: registry.k8s.io
 
-# Runtime: containerd or crio.
+# 容器运行时：containerd 或 crio。
 container_runtime: containerd
 container_runtime_service: "{{ 'containerd' if container_runtime == 'containerd' else 'crio' }}"
 containerd_package: containerd
@@ -27,7 +27,7 @@ crio_apt_repository: >-
 crio_apt_key_url: >-
   https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version_minor }}/deb/Release.key
 
-# CRI troubleshooting client installed as a pinned static binary.
+# CRI 排查工具，以固定版本的静态二进制形式安装。
 install_crictl: true
 crictl_version: v1.36.0
 crictl_install_dir: /usr/local/bin
@@ -47,19 +47,18 @@ crictl_checksums:
   arm64: sha256:68328594ccf780a80ae2b092d9f6ce484eec7cf540c275242e8fd954bfd95332
 crictl_checksum: "{{ crictl_checksums[crictl_arch] }}"
 
-# Kubernetes networking.
+# Kubernetes 网络配置。
 pod_network_cidr: 10.244.0.0/16
 service_cidr: 10.96.0.0/16
 cluster_dns_domain: cluster.local
 
-# Empty means "first control-plane address:6443". For multiple control-plane
-# nodes, set this to a stable load-balancer/VIP endpoint, for example k8s.example:6443.
+# 留空表示“第一台控制平面节点的地址:6443”。使用多个控制平面节点时，
+# 请设置为稳定的负载均衡器或 VIP 端点，例如 k8s.example:6443。
 control_plane_endpoint: ""
 api_server_bind_port: 6443
 api_server_cert_sans: []
 
-# CNI is installed separately from kubeadm. Set a custom URL or controller-side
-# file to use another CNI implementation.
+# CNI 独立于 kubeadm 安装。使用其他 CNI 实现时，请设置自定义 URL 或控制端文件。
 cni_plugin: flannel
 cni_manifest_url: >-
   https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
@@ -67,35 +66,35 @@ cni_manifest_checksum: sha256:4148e659a834b51fc9aadc429281c6e80c97e0e25475faacd4
 cni_manifest_file: ""
 offline_cni_manifest: kube-flannel.yml
 
-# Installation transport.
-install_mode: online  # online or offline
+# 安装传输方式。
+install_mode: online  # online（在线）或 offline（离线）
 offline_bundle_path: ""
 offline_bundle_url: ""
 offline_bundle_checksum: ""
 offline_remote_dir: /opt/ansible-install-k8s/offline
 
-# Optional HTTP proxy environment passed to package/download tasks.
+# 可选的 HTTP 代理环境变量，会传递给软件包安装和下载任务。
 proxy_env: {}
 
-# Optional containerd registry endpoints. Example:
+# 可选的 containerd 镜像仓库端点。例如：
 # registry_mirrors:
 #   registry.example.com:
 #     endpoint: https://registry.example.com
 #     skip_verify: false
 registry_mirrors: {}
 
-# kubelet and kubeadm customization.
+# kubelet 和 kubeadm 自定义配置。
 kubelet_max_pods: 110
 kubeadm_extra_args: []
 kubelet_node_ip: ""
 kubernetes_apply_force_conflicts: false
 
-# Where the controller stores the fetched administrator kubeconfig.
+# 控制端保存管理员 kubeconfig 的位置。
 kubeconfig_output_dir: "{{ playbook_dir }}/../artifacts"
 kubeconfig_output_file: "{{ kubeconfig_output_dir }}/{{ cluster_name }}.conf"
 kubeconfig_server: ""
 
-# Optional cluster add-ons. Each URL can be replaced with an internal mirror.
+# 可选的集群附加组件。每个 URL 都可以替换为内部镜像地址。
 addons:
   metrics_server: false
   cert_manager: false
@@ -113,7 +112,7 @@ addon_manifest_checksums:
   reloader: sha256:d3f8faee2f4a9275a7958d76205115a111b441c47f6cc31abd749fc4c31e6a53
   istio: ""
 
-# Optional dufs artifact server. It is not required by site.yml.
+# 可选的 dufs 制品服务器，site.yml 不依赖该服务。
 dufs_version: v0.46.0
 dufs_port: 666
 dufs_root: "{{ offline_remote_dir }}"

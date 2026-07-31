@@ -1,11 +1,11 @@
 ---
-- name: Build the enabled add-on list
+- name: 生成已启用的附加组件列表
   ansible.builtin.set_fact:
     enabled_addons: >-
       {{ addons | dict2items | selectattr('value', 'equalto', true)
          | map(attribute='key') | list }}
 
-- name: Validate enabled add-on manifests
+- name: 验证已启用的附加组件清单
   ansible.builtin.assert:
     that:
       - addon_manifests[item] | default('') | length > 0 or install_mode == 'offline'
@@ -13,10 +13,11 @@
         install_mode == 'offline' or
         (addon_manifest_checksums | default({})).get(item, '') | length > 0
     fail_msg: >-
-      Set addon_manifests.{{ item }} and its checksum before enabling this add-on.
+      启用此附加组件前，请设置 addon_manifests.{{ item }} 及其校验和。
+    success_msg: 附加组件 {{ item }} 的清单参数有效。
   loop: "{{ enabled_addons }}"
 
-- name: Create the remote add-on manifest directory
+- name: 创建远程附加组件清单目录
   ansible.builtin.file:
     path: /etc/kubernetes/addons
     state: directory
@@ -24,7 +25,7 @@
     group: root
     mode: "0755"
 
-- name: Download enabled add-on manifests
+- name: 下载已启用的附加组件清单
   ansible.builtin.get_url:
     url: "{{ addon_manifests[item] }}"
     dest: "/etc/kubernetes/addons/{{ item }}.yaml"
@@ -36,7 +37,7 @@
   loop: "{{ enabled_addons }}"
   when: install_mode == 'online'
 
-- name: Copy enabled add-on manifests from the offline bundle
+- name: 从离线包复制已启用的附加组件清单
   ansible.builtin.copy:
     src: "{{ offline_remote_dir }}/manifests/{{ item }}.yaml"
     dest: "/etc/kubernetes/addons/{{ item }}.yaml"
@@ -47,7 +48,7 @@
   loop: "{{ enabled_addons }}"
   when: install_mode == 'offline'
 
-- name: Check whether enabled add-ons would change the cluster
+- name: 检查已启用的附加组件是否会改变集群
   ansible.builtin.command:
     argv:
       - kubectl
@@ -62,7 +63,7 @@
   changed_when: false
   failed_when: addon_diff_results.rc not in [0, 1]
 
-- name: Apply enabled add-ons when they have changed
+- name: 在清单发生变化时应用已启用的附加组件
   ansible.builtin.command:
     argv: >-
       {{ ['kubectl', '--kubeconfig=/etc/kubernetes/admin.conf', 'apply',
@@ -76,7 +77,7 @@
   when: item.rc == 1
   changed_when: true
 
-- name: Report when no add-ons are enabled
+- name: 提示未启用任何附加组件
   ansible.builtin.debug:
-    msg: No optional add-ons are enabled.
+    msg: 未启用任何可选附加组件。
   when: enabled_addons | length == 0
