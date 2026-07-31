@@ -1,0 +1,7 @@
+---
+runtime-endpoint: "{{ kubernetes_cri_socket }}"
+image-endpoint: "{{ kubernetes_cri_socket }}"
+timeout: {{ crictl_timeout }}
+debug: {{ crictl_debug | bool | lower }}
+pull-image-on-create: {{ crictl_pull_image_on_create | bool | lower }}
+max-retries: {{ crictl_max_retries }}

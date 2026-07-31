@@ -27,6 +27,26 @@ crio_apt_repository: >-
 crio_apt_key_url: >-
   https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version_minor }}/deb/Release.key
 
+# CRI troubleshooting client installed as a pinned static binary.
+install_crictl: true
+crictl_version: v1.36.0
+crictl_install_dir: /usr/local/bin
+crictl_install_path: "{{ crictl_install_dir }}/crictl"
+crictl_config_dir: /etc
+crictl_config_path: "{{ crictl_config_dir }}/crictl.yaml"
+crictl_timeout: 10
+crictl_debug: false
+crictl_pull_image_on_create: false
+crictl_max_retries: 3
+crictl_download_url: >-
+  {{ 'https://github.com/kubernetes-sigs/cri-tools/releases/download/'
+     ~ crictl_version ~ '/crictl-' ~ crictl_version ~ '-linux-'
+     ~ crictl_arch ~ '.tar.gz' }}
+crictl_checksums:
+  amd64: sha256:83855e114566a8a8c44c548d515670f51de3a5e1da8b2effb59870e2f10c25a3
+  arm64: sha256:68328594ccf780a80ae2b092d9f6ce484eec7cf540c275242e8fd954bfd95332
+crictl_checksum: "{{ crictl_checksums[crictl_arch] }}"
+
 # Kubernetes networking.
 pod_network_cidr: 10.244.0.0/16
 service_cidr: 10.96.0.0/16

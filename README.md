@@ -9,6 +9,7 @@ private registry, internal DNS name, or CI/CD platform.
 - amd64 and arm64
 - one or more control-plane nodes and any number of workers
 - containerd by default; CRI-O is optional
+- pinned crictl static binary configured for the selected CRI runtime
 - Flannel by default; another CNI can be supplied as a manifest URL or local file
 - online installation or an offline bundle copied by Ansible/downloaded from an HTTP server
 - optional metrics-server, cert-manager, Reloader, and Istio manifests
@@ -104,10 +105,27 @@ offline_bundle_path: /absolute/path/on/ansible-controller/k8s-offline-bundle
 # offline_bundle_checksum: sha256:<archive checksum>
 ```
 
-The extracted bundle must contain `packages/*.deb`, `images/*.tar`, and `manifests/<cni file>`. Any HTTP server can host
-the bundle; dufs is available as an optional helper through `playbooks/artifact-server.yml`.
+The extracted bundle must contain `packages/*.deb`, `images/*.tar`, `manifests/<cni file>`, and `bin/crictl` when crictl
+installation is enabled. Any HTTP server can host the bundle; dufs is available as an optional helper through
+`playbooks/artifact-server.yml`.
 
 See [docs/offline-installation.md](docs/offline-installation.md) for the expected layout.
+
+## Node troubleshooting with crictl
+
+crictl is installed by default as a checksum-verified static binary and configured through `/etc/crictl.yaml`. It uses
+the same `kubernetes_cri_socket` as kubeadm, so it automatically targets containerd or CRI-O:
+
+```bash
+sudo crictl info
+sudo crictl pods
+sudo crictl ps -a
+sudo crictl images
+sudo crictl logs <container-id>
+```
+
+Set `install_crictl: false` to omit the tool. Keep `crictl_version` on the same major/minor release as Kubernetes, and
+update both architecture checksums whenever the pinned crictl version changes.
 
 ## Optional add-ons
 
@@ -157,6 +175,7 @@ All documented defaults are in `inventories/example/group_vars/all.yml`. Importa
 
 - `kubernetes_version` and `kubernetes_version_minor`
 - `container_runtime`
+- `install_crictl` and `crictl_version`
 - `pod_network_cidr` and `service_cidr`
 - `control_plane_endpoint`
 - `api_server_cert_sans`

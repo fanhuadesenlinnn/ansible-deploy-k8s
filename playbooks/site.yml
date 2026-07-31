@@ -46,6 +46,8 @@
     - artifact_bundle
     - os_prepare
     - container_runtime
+    - role: crictl
+      when: install_crictl | bool
     - kubernetes_packages
 
 - name: Initialize or extend the control plane

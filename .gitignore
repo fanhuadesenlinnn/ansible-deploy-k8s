@@ -9,12 +9,15 @@ files/offline-bundle/*
 !files/offline-bundle/packages/
 !files/offline-bundle/images/
 !files/offline-bundle/manifests/
+!files/offline-bundle/bin/
 files/offline-bundle/packages/*
 files/offline-bundle/images/*
 files/offline-bundle/manifests/*
+files/offline-bundle/bin/*
 !files/offline-bundle/packages/.gitkeep
 !files/offline-bundle/images/.gitkeep
 !files/offline-bundle/manifests/.gitkeep
+!files/offline-bundle/bin/.gitkeep
 inventories/*
 !inventories/example/
 !inventories/example/**

@@ -7,8 +7,10 @@
       - conntrack
       - curl
       - gpg
+      - gzip
       - iptables
       - socat
+      - tar
     state: present
     update_cache: true
     cache_valid_time: 3600

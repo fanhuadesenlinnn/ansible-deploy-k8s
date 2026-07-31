@@ -1,0 +1,115 @@
+---
+- name: Map host architecture to the crictl release architecture
+  ansible.builtin.set_fact:
+    crictl_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
+
+- name: Validate the online crictl release inputs
+  ansible.builtin.assert:
+    that:
+      - crictl_download_url | length > 0
+      - crictl_checksum | length > 0
+    fail_msg: Set crictl_download_url and crictl_checksum for the selected version and architecture.
+  when: install_mode == 'online'
+
+- name: Create the crictl installation directory
+  ansible.builtin.file:
+    path: "{{ crictl_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the crictl configuration directory
+  ansible.builtin.file:
+    path: "{{ crictl_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check the installed crictl version
+  ansible.builtin.command:
+    argv:
+      - "{{ crictl_install_path }}"
+      - --version
+  register: crictl_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Determine whether crictl must be installed
+  ansible.builtin.set_fact:
+    crictl_needs_install: >-
+      {{ crictl_installed_version.rc != 0 or
+         crictl_version not in (crictl_installed_version.stdout | default('')) }}
+
+- name: Download the crictl release archive
+  ansible.builtin.get_url:
+    url: "{{ crictl_download_url }}"
+    dest: "/tmp/crictl-{{ crictl_version }}-linux-{{ crictl_arch }}.tar.gz"
+    checksum: "{{ crictl_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when:
+    - install_mode == 'online'
+    - crictl_needs_install | bool
+
+- name: Install crictl from the online release archive
+  ansible.builtin.unarchive:
+    src: "/tmp/crictl-{{ crictl_version }}-linux-{{ crictl_arch }}.tar.gz"
+    dest: "{{ crictl_install_dir }}"
+    remote_src: true
+    include:
+      - crictl
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - install_mode == 'online'
+    - crictl_needs_install | bool
+
+- name: Install crictl from the offline bundle
+  ansible.builtin.copy:
+    src: "{{ offline_remote_dir }}/bin/crictl"
+    dest: "{{ crictl_install_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: install_mode == 'offline'
+
+- name: Configure crictl for the selected container runtime
+  ansible.builtin.template:
+    src: crictl.yaml.j2
+    dest: "{{ crictl_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read the installed crictl version
+  ansible.builtin.command:
+    argv:
+      - "{{ crictl_install_path }}"
+      - --version
+  register: crictl_version_result
+  changed_when: false
+
+- name: Verify the requested crictl version is installed
+  ansible.builtin.assert:
+    that:
+      - crictl_version in crictl_version_result.stdout
+    fail_msg: >-
+      Installed crictl does not match crictl_version={{ crictl_version }}.
+
+- name: Verify crictl can reach the container runtime
+  ansible.builtin.command:
+    argv:
+      - "{{ crictl_install_path }}"
+      - "--config={{ crictl_config_path }}"
+      - info
+  register: crictl_runtime_info
+  changed_when: false
+  retries: 5
+  delay: 2
+  until: crictl_runtime_info.rc == 0

@@ -91,6 +91,14 @@
   register: offline_bundle_cni_manifest
   when: install_mode == 'offline'
 
+- name: Inspect the offline crictl binary
+  ansible.builtin.stat:
+    path: "{{ offline_remote_dir }}/bin/crictl"
+  register: offline_bundle_crictl
+  when:
+    - install_mode == 'offline'
+    - install_crictl | bool
+
 - name: Require a complete offline bundle
   ansible.builtin.assert:
     that:
@@ -126,8 +134,12 @@
       - offline_bundle_images.matched | int > 0
       - offline_bundle_cni_manifest.stat.exists
       - offline_bundle_cni_manifest.stat.isreg
+      - >-
+        not (install_crictl | bool) or
+        (offline_bundle_crictl.stat.exists | default(false) and
+        offline_bundle_crictl.stat.isreg | default(false))
     fail_msg: >-
       The offline bundle must include kubeadm, kubelet, kubectl, the selected
       runtime and all dependencies under packages/, at least one images/*.tar,
-      and the configured CNI manifest under manifests/.
+      the configured CNI manifest under manifests/, and bin/crictl when enabled.
   when: install_mode == 'offline'

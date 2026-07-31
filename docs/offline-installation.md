@@ -7,6 +7,8 @@ download the same tar archive from an HTTP server such as dufs, Nginx, MinIO, or
 
 ```text
 k8s-offline-bundle/
+├── bin/
+│   └── crictl
 ├── packages/
 │   ├── containerd_*.deb
 │   ├── kubeadm_*.deb
@@ -23,6 +25,10 @@ k8s-offline-bundle/
 Package dependencies must match the target distribution and architecture. Build separate bundles when the operating
 system release or architecture differs. The installer verifies that the bundle contains kubeadm, kubelet, kubectl, the
 selected container runtime, a CNI manifest, and at least one image archive before package installation begins.
+
+When `install_crictl` is enabled, place the extracted Linux binary for the target architecture at `bin/crictl`. The role
+copies it to `/usr/local/bin/crictl`, sets executable permissions, writes `/etc/crictl.yaml`, and verifies the configured
+CRI endpoint before kubeadm runs.
 
 Image archives must be readable by the chosen runtime. For containerd, create them with `ctr`, `nerdctl`, or another
 OCI-compatible tool. The installer imports every `images/*.tar` file into the `k8s.io` namespace.

@@ -19,6 +19,15 @@
       - install_mode in ['online', 'offline']
       - kubernetes_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
       - kubernetes_version_minor is match('^v[0-9]+\.[0-9]+$')
+      - not (install_crictl | bool) or crictl_version is match('^v[0-9]+\.[0-9]+\.[0-9]+$')
+      - >-
+        not (install_crictl | bool) or
+        crictl_version.split('.')[0] == 'v' ~ kubernetes_version.split('.')[0]
+      - >-
+        not (install_crictl | bool) or
+        crictl_version.split('.')[1] == kubernetes_version.split('.')[1]
+      - not (install_crictl | bool) or crictl_timeout | int >= 1
+      - not (install_crictl | bool) or crictl_max_retries | int >= 0
       - kubernetes_version is ansible.builtin.version('1.31.0', '>=')
       - >-
         kubernetes_version_minor ==
@@ -30,8 +39,9 @@
         cni_manifest_checksum | default('') | length > 0)
     fail_msg: >-
       Review the version, runtime, install mode, and cluster CIDR variables.
-      Online CNI downloads require a URL and checksum. This project requires
-      Kubernetes 1.31+ because it uses kubeadm v1beta4.
+      crictl must match the Kubernetes major/minor version. Online CNI downloads
+      require a URL and checksum. This project requires Kubernetes 1.31+ because
+      it uses kubeadm v1beta4.
 
 - name: Inspect existing Kubernetes node state
   ansible.builtin.stat:
