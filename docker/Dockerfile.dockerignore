@@ -1,8 +1,9 @@
 # Docker 构建上下文默认排除全部内容，只放行镜像构建确实需要的文件。
 # 真实 Inventory、SSH 凭据、artifacts 和离线镜像不会被发送给 Docker Builder。
 **
-!requirements.txt
-!requirements.yml
+!ansible/
+!ansible/requirements.txt
+!ansible/requirements.yml
 !docker/
 !docker/Dockerfile
 !docker/Dockerfile.dockerignore

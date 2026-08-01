@@ -5,25 +5,28 @@ name: ansible-deploy-k8s
 services:
   ansible:
     build:
-      # 构建上下文必须是仓库根目录，Dockerfile 才能读取项目现有的 requirements 文件。
+      # 构建上下文必须是仓库根目录，Dockerfile 才能读取 ansible/ 中的依赖定义。
       context: ..
       dockerfile: docker/Dockerfile
-    working_dir: /workspace
+    working_dir: /workspace/ansible
     init: true
     stdin_open: true
     tty: true
 
-    # 容器只需要访问当前项目；部署产物会通过同一个挂载保留在宿主机 artifacts/ 中。
+    # 容器只需要访问当前项目；部署产物会通过同一个挂载保留在宿主机 ansible/artifacts/ 中。
     volumes:
       - type: bind
         source: ..
         target: /workspace
 
     environment:
-      ANSIBLE_CONFIG: /workspace/ansible.cfg
+      # HOME 位于临时文件系统，供非 root 的 ansible 用户保存 SSH ControlPath 等运行时文件。
+      HOME: /tmp/ansible-runtime/home
+      ANSIBLE_CONFIG: /workspace/ansible/ansible.cfg
       ANSIBLE_COLLECTIONS_PATH: /usr/share/ansible/collections
       ANSIBLE_HOME: /tmp/ansible-runtime/home
       ANSIBLE_LOCAL_TEMP: /tmp/ansible-runtime/tmp
+      ANSIBLE_REMOTE_TEMP: /tmp/ansible-runtime/tmp
 
     # 控制端不需要特权、Linux Capability 或 Docker Socket。
     read_only: true

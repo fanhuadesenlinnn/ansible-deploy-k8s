@@ -55,7 +55,6 @@ docker_arguments=(
   run
   --build
   --rm
-  --user "$(id -u):$(id -g)"
 )
 
 # 非交互环境关闭 TTY；交互终端保留密码、Vault 和 become 提示能力。

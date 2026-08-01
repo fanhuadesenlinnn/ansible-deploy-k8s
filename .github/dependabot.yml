@@ -8,7 +8,7 @@ updates:
       interval: weekly
 
   - package-ecosystem: pip
-    directory: /
+    directory: /ansible
     schedule:
       interval: weekly
     # ansible-core 的宽版本范围用于按控制端 Python 版本选择最新兼容版本：

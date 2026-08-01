@@ -5,10 +5,10 @@
 推荐使用根目录的 `ops.sh` 执行常见操作：
 
 ```bash
-./ops.sh check -i inventories/my-cluster/hosts.yml --executor docker
-./ops.sh ping -i inventories/my-cluster/hosts.yml --executor docker
-./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online
-./ops.sh addons -i inventories/my-cluster/hosts.yml --executor docker
+./ops.sh check -i ansible/inventories/my-cluster/hosts.yml --executor docker
+./ops.sh ping -i ansible/inventories/my-cluster/hosts.yml --executor docker
+./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor docker --mode online
+./ops.sh addons -i ansible/inventories/my-cluster/hosts.yml --executor docker
 ```
 
 所有部署命令都会先显示执行环境、安装模式、Inventory、资源来源和底层命令。人工操作需要再次确认；自动化环境
@@ -19,7 +19,7 @@ Playbook，不会产生两套部署逻辑。
 
 ## 适用操作
 
-`playbooks/site.yml` 用于安装新集群和添加节点。它不会执行 Kubernetes 版本升级，也不会迁移已经加入集群的
+`ansible/playbooks/site.yml` 用于安装新集群和添加节点。它不会执行 Kubernetes 版本升级，也不会迁移已经加入集群的
 节点所使用的容器运行时。
 
 对于已有节点，预检会确认：
@@ -45,7 +45,7 @@ Playbook，不会产生两套部署逻辑。
 在 Ansible 控制端检查集群：
 
 ```bash
-export KUBECONFIG="$PWD/artifacts/<cluster-name>.conf"
+export KUBECONFIG="$PWD/ansible/artifacts/<cluster-name>.conf"
 kubectl get nodes -o wide
 kubectl -n kube-system get pods -o wide
 kubectl get events --all-namespaces --sort-by=.lastTimestamp
@@ -73,7 +73,7 @@ sudo crictl logs <容器 ID>
 
 ## kubeconfig
 
-管理员 kubeconfig 默认导出到 `artifacts/<cluster-name>.conf`，文件权限为 `0600`。该文件拥有集群管理员权限，
+管理员 kubeconfig 默认导出到 `ansible/artifacts/<cluster-name>.conf`，文件权限为 `0600`。该文件拥有集群管理员权限，
 不应提交到 Git、发送到公共聊天或复制给不需要管理员权限的用户。
 
 需要通过负载均衡器或外部域名访问 API Server 时，可以设置 `kubeconfig_server`。该变量只修改导出的副本，
@@ -85,9 +85,10 @@ sudo crictl logs <容器 ID>
 `cluster_name` 均正确。
 
 ```bash
-ansible-playbook -i inventories/my-cluster/hosts.yml playbooks/reset.yml \
-  -e kubernetes_reset_confirm=true \
-  -e kubernetes_reset_cluster_name=<cluster_name>
+./ops.sh reset \
+  -i ansible/inventories/my-cluster/hosts.yml \
+  --executor local \
+  --cluster-name <cluster_name>
 ```
 
 Playbook 会执行：

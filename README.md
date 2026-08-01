@@ -3,6 +3,22 @@
 使用 Ansible 和 kubeadm 部署 Kubernetes 集群，支持单控制平面或多控制平面、containerd 或 CRI-O，以及
 在线和离线安装。
 
+## 目录结构
+
+项目按功能边界组织，根目录的 `ops.sh` 是统一入口：
+
+```text
+.
+├── ops.sh       # 统一操作入口
+├── ansible/     # Ansible 配置、依赖、Inventory、Playbook 和 Role
+├── docker/      # Docker 控制端镜像、Compose 配置和运行脚本
+├── offline/     # 离线包制作、校验、目录模板和使用说明
+├── docs/        # 项目原理及运维文档
+└── scripts/     # 与部署方式无关的项目检查脚本
+```
+
+通常只需要在根目录调用 `ops.sh`；各功能目录中的脚本属于底层实现。
+
 ## 功能与支持
 
 - 目标系统：使用 systemd 和 apt 的 Ubuntu、Debian
@@ -39,13 +55,13 @@ Ansible 控制端：
 
 ```bash
 # 使用本机 Ansible 在线部署
-./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor local --mode online
+./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor local --mode online
 
 # 使用 Docker 中的 Ansible 在线部署
-./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online
+./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor docker --mode online
 
 # 先查看实际命令，不连接或修改节点
-./ops.sh deploy -i inventories/my-cluster/hosts.yml --executor docker --mode online --plan
+./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor docker --mode online --plan
 ```
 
 `ops.sh` 只是安全、统一的调度入口，底层仍调用现有 Playbook；它不会改变 Inventory 中定义的集群版本、网段、
@@ -58,16 +74,16 @@ Ansible 控制端：
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-ansible-galaxy collection install -r requirements.yml
+pip install -r ansible/requirements.txt
+ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
 ### 2. 创建集群 Inventory
 
 ```bash
-cp -R inventories/example inventories/my-cluster
-$EDITOR inventories/my-cluster/hosts.yml
-$EDITOR inventories/my-cluster/group_vars/all.yml
+cp -R ansible/inventories/example ansible/inventories/my-cluster
+$EDITOR ansible/inventories/my-cluster/hosts.yml
+$EDITOR ansible/inventories/my-cluster/group_vars/all.yml
 ```
 
 首次部署至少需要确认这些配置：
@@ -83,24 +99,24 @@ $EDITOR inventories/my-cluster/group_vars/all.yml
 | `install_mode` | 选择 `online` 或 `offline`。 |
 
 所有变量的用途和注意事项都写在
-[`inventories/example/group_vars/all.yml`](inventories/example/group_vars/all.yml) 中。
+[`ansible/inventories/example/group_vars/all.yml`](ansible/inventories/example/group_vars/all.yml) 中。
 
 ### 3. 验证连接
 
 ```bash
-ansible -i inventories/my-cluster/hosts.yml k8s_cluster -m ansible.builtin.ping
+./ops.sh ping -i ansible/inventories/my-cluster/hosts.yml --executor local
 ```
 
 ### 4. 部署集群
 
 ```bash
-ansible-playbook -i inventories/my-cluster/hosts.yml playbooks/site.yml
+./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor local --mode online
 ```
 
-部署完成后，管理员 kubeconfig 位于 Ansible 控制端的 `artifacts/<cluster-name>.conf`。
+部署完成后，管理员 kubeconfig 位于 Ansible 控制端的 `ansible/artifacts/<cluster-name>.conf`。
 
 ```bash
-export KUBECONFIG="$PWD/artifacts/<cluster-name>.conf"
+export KUBECONFIG="$PWD/ansible/artifacts/<cluster-name>.conf"
 kubectl get nodes -o wide
 ```
 
@@ -111,11 +127,11 @@ kubectl get nodes -o wide
 ```bash
 cp docker/.env.example docker/.env
 $EDITOR docker/.env
-./docker/run.sh ansible --version
-./docker/run.sh \
-  ansible-playbook \
-  -i inventories/my-cluster/hosts.yml \
-  playbooks/site.yml
+./ops.sh check -i ansible/inventories/example/hosts.yml --executor docker
+./ops.sh deploy \
+  -i ansible/inventories/my-cluster/hosts.yml \
+  --executor docker \
+  --mode online
 ```
 
 SSH 凭据、离线文件路径和安全设置请参阅 [Docker 使用说明](docker/README.md)。
@@ -127,7 +143,7 @@ SSH 凭据、离线文件路径和安全设置请参阅 [Docker 使用说明](do
 先在 `group_vars/all.yml` 的 `addons` 中启用组件，再运行：
 
 ```bash
-ansible-playbook -i inventories/my-cluster/hosts.yml playbooks/addons.yml
+./ops.sh addons -i ansible/inventories/my-cluster/hosts.yml --executor local
 ```
 
 ### 使用 crictl 排查节点
@@ -155,14 +171,14 @@ sudo crictl logs <容器 ID>
 
 ```bash
 ./ops.sh deploy \
-  -i inventories/my-cluster/hosts.yml \
+  -i ansible/inventories/my-cluster/hosts.yml \
   --executor docker \
   --mode offline \
-  --bundle dist/offline/k8s-1.36.3-ubuntu-24.04-amd64
+  --bundle offline/bundles/k8s-1.36.3-ubuntu-24.04-amd64
 ```
 
 离线包也可以由所有节点通过 HTTP 下载。支持范围、目录结构和自定义 CNI 方法请参阅
-[离线安装说明](docs/offline-installation.md)。
+[离线安装说明](offline/README.md)。
 
 ### 重置集群
 
@@ -171,7 +187,7 @@ sudo crictl logs <容器 ID>
 ## 文档
 
 - [项目结构与执行流程](docs/project-guide.md)
-- [离线安装说明](docs/offline-installation.md)
+- [离线安装说明](offline/README.md)
 - [运维、排查与重置](docs/operations.md)
 - [使用 Docker 运行](docker/README.md)
 - [安全策略](SECURITY.md)
@@ -179,10 +195,10 @@ sudo crictl logs <容器 ID>
 ## 开发检查
 
 ```bash
-pip install -r requirements-dev.txt
-ansible-galaxy collection install -r requirements.yml
+pip install -r ansible/requirements-dev.txt
+ansible-galaxy collection install -r ansible/requirements.yml
 yamllint .
-ansible-lint
+(cd ansible && ansible-lint)
 ```
 
 安装了 [just](https://github.com/casey/just) 时，也可以运行：

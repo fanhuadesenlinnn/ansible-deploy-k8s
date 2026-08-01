@@ -1,0 +1,10 @@
+---
+# 使用最严格的 production 规则集，让本地检查与 GitHub Actions 保持一致。
+profile: production
+# 运行产物不属于 Ansible 源码检查范围。
+exclude_paths:
+  - artifacts/
+# 项目变量集中定义在 group_vars 中，不强制添加 Role 前缀；行长度交给 yamllint 统一提示。
+skip_list:
+  - yaml[line-length]
+  - var-naming[no-role-prefix]

@@ -1,0 +1,101 @@
+---
+# CNI Role：把在线、本地或离线来源统一放到远程清单路径，再通过 kubectl Server-Side Apply 管理。
+# 本 Role 只在第一台控制平面节点执行。完成后等待 CoreDNS，CoreDNS 就绪通常表示 Pod 网络已经可用。
+
+- name: 定义远程 CNI 清单路径
+  ansible.builtin.set_fact:
+    remote_cni_manifest: /etc/kubernetes/cni-manifest.yaml
+
+- name: 从控制端复制自定义 CNI 清单
+  ansible.builtin.copy:
+    src: "{{ cni_manifest_file }}"
+    dest: "{{ remote_cni_manifest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - install_mode == 'online'
+    - cni_manifest_file | length > 0
+
+- name: 下载已配置的 CNI 清单
+  ansible.builtin.get_url:
+    url: "{{ cni_manifest_url }}"
+    dest: "{{ remote_cni_manifest }}"
+    checksum: "{{ cni_manifest_checksum | default(omit, true) }}"
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  when:
+    - install_mode == 'online'
+    - cni_manifest_file | length == 0
+
+- name: 从离线包复制 CNI 清单
+  ansible.builtin.copy:
+    src: "{{ offline_remote_dir }}/manifests/{{ offline_cni_manifest }}"
+    dest: "{{ remote_cni_manifest }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: install_mode == 'offline'
+
+# Flannel 官方清单默认使用 10.244.0.0/16；若用户修改 pod_network_cidr，这里同步替换清单。
+- name: 使 Flannel 网络与配置的 Pod CIDR 保持一致
+  ansible.builtin.replace:
+    path: "{{ remote_cni_manifest }}"
+    regexp: 10\.244\.0\.0/16
+    replace: "{{ pod_network_cidr }}"
+  when: cni_plugin == 'flannel'
+
+# kubectl diff 返回 0 表示无变化，1 表示存在差异。
+# 首次安装时，清单中的 Namespace 还不存在，kubectl diff 会返回 2；
+# 这种情况应继续 apply，由清单先创建 Namespace，再创建其中的资源。
+- name: 检查 CNI 清单是否会改变集群
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - diff
+      - --server-side
+      - --field-manager=ansible-deploy-k8s
+      - -f
+      - "{{ remote_cni_manifest }}"
+  register: cni_diff_result
+  changed_when: false
+  failed_when: >-
+    cni_diff_result.rc not in [0, 1] and
+    not (
+      cni_diff_result.rc == 2 and
+      'namespaces "' in cni_diff_result.stderr and
+      'not found' in (cni_diff_result.stderr | lower)
+    )
+
+# diff 发现变化，或首次安装尚无 Namespace 时执行 apply。
+- name: 在 CNI 清单发生变化时应用配置
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig=/etc/kubernetes/admin.conf', 'apply',
+          '--server-side', '--field-manager=ansible-deploy-k8s']
+         + (['--force-conflicts']
+            if kubernetes_apply_force_conflicts | default(false) | bool else [])
+         + ['-f', remote_cni_manifest] }}
+  when: cni_diff_result.rc in [1, 2]
+  changed_when: true
+  register: cni_apply_result
+
+- name: 安装 CNI 后等待 CoreDNS 就绪
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --namespace=kube-system
+      - rollout
+      - status
+      - deployment/coredns
+      - --timeout=300s
+  register: coredns_rollout
+  changed_when: false
+  retries: 3
+  delay: 10
+  until: coredns_rollout.rc == 0

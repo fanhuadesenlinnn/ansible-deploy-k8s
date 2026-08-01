@@ -1,0 +1,95 @@
+---
+# 附加组件 Role：读取 addons 字典，只处理值为 true 的组件。
+# 在线模式下载带校验和的清单，离线模式读取 manifests/<组件名>.yaml，然后使用 Server-Side Apply。
+# 它独立于主安装流程，适合在集群建成后单独运行 playbooks/addons.yml。
+
+- name: 生成已启用的附加组件列表
+  ansible.builtin.set_fact:
+    enabled_addons: >-
+      {{ addons | dict2items | selectattr('value', 'equalto', true)
+         | map(attribute='key') | list }}
+
+- name: 验证已启用的附加组件清单
+  ansible.builtin.assert:
+    that:
+      - addon_manifests[item] | default('') | length > 0 or install_mode == 'offline'
+      - >-
+        install_mode == 'offline' or
+        (addon_manifest_checksums | default({})).get(item, '') | length > 0
+    fail_msg: >-
+      启用此附加组件前，请设置 addon_manifests.{{ item }} 及其校验和。
+    success_msg: 附加组件 {{ item }} 的清单参数有效。
+  loop: "{{ enabled_addons }}"
+
+- name: 创建远程附加组件清单目录
+  ansible.builtin.file:
+    path: /etc/kubernetes/addons
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: 下载已启用的附加组件清单
+  ansible.builtin.get_url:
+    url: "{{ addon_manifests[item] }}"
+    dest: "/etc/kubernetes/addons/{{ item }}.yaml"
+    checksum: "{{ addon_manifest_checksums[item] }}"
+    owner: root
+    group: root
+    mode: "0644"
+  environment: "{{ proxy_env }}"
+  loop: "{{ enabled_addons }}"
+  when: install_mode == 'online'
+
+- name: 从离线包复制已启用的附加组件清单
+  ansible.builtin.copy:
+    src: "{{ offline_remote_dir }}/manifests/{{ item }}.yaml"
+    dest: "/etc/kubernetes/addons/{{ item }}.yaml"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ enabled_addons }}"
+  when: install_mode == 'offline'
+
+# 与 CNI 相同，kubectl diff 的返回码 1 表示有差异，不应当作任务失败。
+# 首次安装时，允许“清单内 Namespace 尚不存在”产生的返回码 2。
+- name: 检查已启用的附加组件是否会改变集群
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - diff
+      - --server-side
+      - --field-manager=ansible-deploy-k8s
+      - -f
+      - "/etc/kubernetes/addons/{{ item }}.yaml"
+  loop: "{{ enabled_addons }}"
+  register: addon_diff_results
+  changed_when: false
+  failed_when: >-
+    addon_diff_results.rc not in [0, 1] and
+    not (
+      addon_diff_results.rc == 2 and
+      'namespaces "' in addon_diff_results.stderr and
+      'not found' in (addon_diff_results.stderr | lower)
+    )
+
+- name: 在清单发生变化时应用已启用的附加组件
+  ansible.builtin.command:
+    argv: >-
+      {{ ['kubectl', '--kubeconfig=/etc/kubernetes/admin.conf', 'apply',
+          '--server-side', '--field-manager=ansible-deploy-k8s']
+         + (['--force-conflicts']
+            if kubernetes_apply_force_conflicts | default(false) | bool else [])
+         + ['-f', '/etc/kubernetes/addons/' ~ item.item ~ '.yaml'] }}
+  loop: "{{ addon_diff_results.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc in [1, 2]
+  changed_when: true
+
+- name: 提示未启用任何附加组件
+  ansible.builtin.debug:
+    msg: 未启用任何可选附加组件。
+  when: enabled_addons | length == 0

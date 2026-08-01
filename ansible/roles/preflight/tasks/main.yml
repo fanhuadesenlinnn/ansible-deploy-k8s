@@ -1,0 +1,139 @@
+---
+# 预检 Role：在安装软件包或修改系统之前尽早发现不支持或高风险的配置。
+# 主要输入：Ansible Facts、Kubernetes/运行时/网络变量以及 Inventory 分组。
+# 本 Role 只读取主机状态并执行断言，不负责自动修复版本迁移、运行时迁移或高可用入口。
+
+# 当前实现依赖 apt、systemd 和后续任务使用的 Debian 软件包格式。
+- name: 验证操作系统系列是否受支持
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Debian'
+      - ansible_service_mgr == 'systemd'
+    fail_msg: 当前版本仅支持使用 systemd 和 apt 的 Debian/Ubuntu 主机。
+    success_msg: 操作系统系列和服务管理器受支持。
+
+- name: 验证 CPU 架构是否受支持
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in ['x86_64', 'aarch64']
+    fail_msg: "不支持的架构：{{ ansible_architecture }}"
+    success_msg: CPU 架构受支持。
+
+- name: 验证安装变量
+  ansible.builtin.assert:
+    that:
+      - container_runtime in ['containerd', 'crio']
+      - install_mode in ['online', 'offline']
+      - kubernetes_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - kubernetes_version_minor is match('^v[0-9]+\.[0-9]+$')
+      - not (install_crictl | bool) or crictl_version is match('^v[0-9]+\.[0-9]+\.[0-9]+$')
+      - >-
+        not (install_crictl | bool) or
+        crictl_version.split('.')[0] == 'v' ~ kubernetes_version.split('.')[0]
+      - >-
+        not (install_crictl | bool) or
+        crictl_version.split('.')[1] == kubernetes_version.split('.')[1]
+      - not (install_crictl | bool) or crictl_timeout | int >= 1
+      - kubelet_fail_swap_on is boolean
+      - kubernetes_version is ansible.builtin.version('1.31.0', '>=')
+      - >-
+        kubernetes_version_minor ==
+        'v' ~ kubernetes_version.split('.')[0] ~ '.' ~ kubernetes_version.split('.')[1]
+      - pod_network_cidr != service_cidr
+      - >-
+        install_mode == 'offline' or cni_manifest_file | length > 0 or
+        (cni_manifest_url | length > 0 and
+        cni_manifest_checksum | default('') | length > 0)
+    fail_msg: >-
+      请检查版本、容器运行时、安装模式和集群 CIDR 变量。crictl 必须与 Kubernetes
+      的主版本号和次版本号一致。在线下载 CNI 时必须提供 URL 和校验和。本项目使用
+      kubeadm v1beta4，因此要求 Kubernetes 1.31 或更高版本。
+    success_msg: 安装变量验证通过。
+
+# admin.conf 表示控制平面已初始化，kubelet.conf 表示普通节点已经加入集群。
+# 后续检查只对已有集群状态的节点执行，避免在全新主机上误报命令不存在。
+- name: 检查现有 Kubernetes 节点状态
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/kubernetes/admin.conf
+    - /etc/kubernetes/kubelet.conf
+  register: kubernetes_existing_state_files
+
+- name: 读取已配置节点上的 kubelet 版本
+  ansible.builtin.command: kubelet --version
+  register: kubernetes_installed_kubelet_version
+  changed_when: false
+  failed_when: false
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
+
+- name: 检查 kubelet 已配置的运行时端点
+  ansible.builtin.stat:
+    path: /var/lib/kubelet/instance-config.yaml
+  register: kubernetes_kubelet_instance_config
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
+
+- name: 读取 kubelet 已配置的运行时端点
+  ansible.builtin.slurp:
+    src: /var/lib/kubelet/instance-config.yaml
+  register: kubernetes_kubelet_instance_config_content
+  when:
+    - kubernetes_kubelet_instance_config.stat.exists | default(false)
+
+# kubelet 的 instance-config.yaml 记录实际使用的 CRI Socket，比仅检查当前变量更可靠。
+- name: 拒绝隐式迁移容器运行时
+  ansible.builtin.assert:
+    that:
+      - >-
+        kubernetes_cri_socket in
+        (kubernetes_kubelet_instance_config_content.content | b64decode)
+    fail_msg: >-
+      此节点配置了不同的 CRI Socket。在现有节点上修改 container_runtime
+      必须执行专门的迁移流程。
+    success_msg: 容器运行时配置与现有节点一致。
+  when:
+    - kubernetes_kubelet_instance_config.stat.exists | default(false)
+
+# site.yml 是安装/扩容流程，不包含 drain、逐版本升级和控制平面升级等必要步骤。
+- name: 拒绝通过安装 Playbook 隐式升级 Kubernetes
+  ansible.builtin.assert:
+    that:
+      - kubernetes_installed_kubelet_version.rc == 0
+      - >-
+        kubernetes_installed_kubelet_version.stdout
+        | regex_search('v[0-9]+\.[0-9]+\.[0-9]+')
+        == 'v' ~ kubernetes_version
+    fail_msg: >-
+      此节点已属于 Kubernetes 集群，但 kubelet 版本与 kubernetes_version 不一致。
+      site.yml 不执行 kubeadm 升级，请改用感知版本的专用升级流程。
+    success_msg: kubelet 版本与目标 Kubernetes 版本一致。
+  when: >-
+    kubernetes_existing_state_files.results
+    | selectattr('stat.exists')
+    | list
+    | length > 0
+
+# 多控制平面节点必须共享一个稳定入口，否则客户端和后续节点会依赖第一台主机的临时地址。
+- name: 要求高可用控制平面使用稳定端点
+  ansible.builtin.assert:
+    that:
+      - control_plane_endpoint | length > 0
+    fail_msg: 多控制平面节点要求 control_plane_endpoint 指向负载均衡器或 VIP。
+    success_msg: 高可用控制平面端点已配置。
+  when: groups['kube_control_plane'] | length > 1
+
+- name: 检查控制平面节点的最低内存
+  ansible.builtin.assert:
+    that:
+      - ansible_memtotal_mb >= 1700
+    fail_msg: 控制平面节点需要约 2 GiB 或更多内存。
+    success_msg: 控制平面节点内存满足要求。
+  when: inventory_hostname in groups['kube_control_plane']

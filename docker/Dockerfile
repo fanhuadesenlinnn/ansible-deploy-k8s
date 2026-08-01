@@ -10,10 +10,11 @@ ARG ANSIBLE_GID=1000
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
-    ANSIBLE_CONFIG=/workspace/ansible.cfg \
+    ANSIBLE_CONFIG=/workspace/ansible/ansible.cfg \
     ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections \
     ANSIBLE_HOME=/tmp/ansible-runtime/home \
-    ANSIBLE_LOCAL_TEMP=/tmp/ansible-runtime/tmp
+    ANSIBLE_LOCAL_TEMP=/tmp/ansible-runtime/tmp \
+    ANSIBLE_REMOTE_TEMP=/tmp/ansible-runtime/tmp
 
 # openssh-client 用于连接目标节点；sshpass 让 --ask-pass 密码登录方式也能工作。
 RUN apt-get update \
@@ -32,7 +33,7 @@ RUN apt-get update \
         "${ANSIBLE_USER}"
 
 # 依赖与项目本机运行方式共用同一份版本约束，避免维护第二套 Ansible 环境定义。
-COPY requirements.txt requirements.yml /tmp/ansible-dependencies/
+COPY ansible/requirements.txt ansible/requirements.yml /tmp/ansible-dependencies/
 
 RUN python -m pip install --requirement /tmp/ansible-dependencies/requirements.txt \
     && ansible-galaxy collection install \
@@ -43,7 +44,7 @@ RUN python -m pip install --requirement /tmp/ansible-dependencies/requirements.t
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/ansible-entrypoint
 
 USER ${ANSIBLE_USER}
-WORKDIR /workspace
+WORKDIR /workspace/ansible
 
 ENTRYPOINT ["ansible-entrypoint"]
 CMD ["ansible", "--version"]

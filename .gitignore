@@ -2,36 +2,43 @@
 .DS_Store
 .env
 .venv/
+.ansible/
 *.retry
 *.log
 
 # 导出的管理员 kubeconfig 可能授予集群最高权限，绝不能提交。
-artifacts/
+ansible/artifacts/
 
 # ops.sh 生成的离线包和归档体积较大，只保留构建脚本，不提交构建结果。
-dist/
+offline/bundles/
 
 # 离线包中的真实软件包、镜像、清单和二进制通常体积很大，也可能来自内部环境。
 # 仅保留说明文件、目录本身和 .gitkeep 占位符。
-files/offline-bundle/*
-!files/offline-bundle/README.md
-!files/offline-bundle/packages/
-!files/offline-bundle/images/
-!files/offline-bundle/manifests/
-!files/offline-bundle/bin/
-files/offline-bundle/packages/*
-files/offline-bundle/images/*
-files/offline-bundle/manifests/*
-files/offline-bundle/bin/*
-!files/offline-bundle/packages/.gitkeep
-!files/offline-bundle/images/.gitkeep
-!files/offline-bundle/manifests/.gitkeep
-!files/offline-bundle/bin/.gitkeep
+offline/bundle-template/*
+!offline/bundle-template/README.md
+!offline/bundle-template/packages/
+!offline/bundle-template/images/
+!offline/bundle-template/manifests/
+!offline/bundle-template/bin/
+offline/bundle-template/packages/*
+offline/bundle-template/images/*
+offline/bundle-template/manifests/*
+offline/bundle-template/bin/*
+!offline/bundle-template/packages/.gitkeep
+!offline/bundle-template/images/.gitkeep
+!offline/bundle-template/manifests/.gitkeep
+!offline/bundle-template/bin/.gitkeep
 
 # 只跟踪无敏感信息的 example Inventory；用户复制出的真实环境目录默认忽略。
-inventories/*
-!inventories/example/
-!inventories/example/**
+ansible/inventories/*
+!ansible/inventories/example/
+!ansible/inventories/example/**
 # 即使位于其他 Inventory 路径，也额外忽略常见的逐主机变量和 Vault 文件。
-inventories/*/host_vars/
-inventories/*/group_vars/vault.yml
+ansible/inventories/*/host_vars/
+ansible/inventories/*/group_vars/vault.yml
+
+# 兼容调整目录前已经生成的本地内容，防止升级后误提交旧 kubeconfig、离线包或真实 Inventory。
+/artifacts/
+/dist/
+files/offline-bundle/
+/inventories/

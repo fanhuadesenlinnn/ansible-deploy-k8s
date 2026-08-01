@@ -7,13 +7,12 @@
 
 ```bash
 ./ops.sh deploy \
-  -i inventories/my-cluster/hosts.yml \
+  -i ansible/inventories/my-cluster/hosts.yml \
   --executor docker \
   --mode online
 ```
 
-推荐入口 `run.sh` 适用于带 Bash 的 macOS、Linux 或 WSL。其他环境仍可直接使用文末的 Compose 命令。
-需要完全控制底层 Ansible 参数时，可以直接调用 `run.sh`。
+`ops.sh` 是推荐入口。`run.sh` 是 Docker 功能内部的底层入口，适用于需要完全控制 Ansible 原生参数的场景。
 
 ## 文件说明
 
@@ -23,7 +22,7 @@ docker/
 ├── Dockerfile.dockerignore       # 最小化构建上下文
 ├── compose.yml                   # 项目挂载和容器安全设置
 ├── entrypoint.sh                 # 准备临时 SSH 凭据
-├── run.sh                        # 推荐的运行入口
+├── run.sh                        # ops.sh 调用的 Docker 底层入口
 ├── .env.example                  # 宿主机 SSH 路径示例
 └── README.md                     # 本文档
 ```
@@ -59,6 +58,9 @@ ANSIBLE_KNOWN_HOSTS=/Users/your-name/.ssh/known_hosts
 ./docker/run.sh ansible-galaxy collection list
 ```
 
+`run.sh` 会把容器工作目录设为 `/workspace/ansible`，所以下面的 Inventory 和 Playbook 路径相对于
+仓库的 `ansible/` 目录。
+
 运行项目语法检查：
 
 ```bash
@@ -74,9 +76,9 @@ ANSIBLE_KNOWN_HOSTS=/Users/your-name/.ssh/known_hosts
 真实 Inventory 仍放在项目原有位置，并由 Git 忽略：
 
 ```bash
-cp -R inventories/example inventories/my-cluster
-$EDITOR inventories/my-cluster/hosts.yml
-$EDITOR inventories/my-cluster/group_vars/all.yml
+cp -R ansible/inventories/example ansible/inventories/my-cluster
+$EDITOR ansible/inventories/my-cluster/hosts.yml
+$EDITOR ansible/inventories/my-cluster/group_vars/all.yml
 ```
 
 验证 SSH：
@@ -98,7 +100,8 @@ $EDITOR inventories/my-cluster/group_vars/all.yml
   playbooks/site.yml
 ```
 
-项目根目录挂载为容器内的 `/workspace`，因此导出的 kubeconfig 会直接保留在宿主机 `artifacts/`。
+项目根目录挂载为容器内的 `/workspace`，容器工作目录是 `/workspace/ansible`，因此导出的 kubeconfig 会直接保留
+在宿主机 `ansible/artifacts/`。
 
 ## 离线安装路径
 
@@ -106,10 +109,10 @@ Playbook 中的文件路径按容器内路径解释。仓库根目录映射为 `
 
 ```yaml
 install_mode: offline
-offline_bundle_path: /workspace/files/offline-bundle
+offline_bundle_path: /workspace/offline/bundles/<离线包目录>
 ```
 
-仓库外的离线包不会自动挂载。可以把它放入项目忽略的 `files/offline-bundle/`，或者在 `compose.yml` 中增加
+仓库外的离线包不会自动挂载。可以把它放入项目忽略的 `offline/bundles/`，或者在 `compose.yml` 中增加
 一条只读挂载并使用对应的容器路径。
 
 ## 直接使用 Compose
@@ -120,12 +123,12 @@ offline_bundle_path: /workspace/files/offline-bundle
 docker compose -f docker/compose.yml run --build --rm ansible ansible --version
 ```
 
-实际部署推荐使用 `run.sh`，它会处理用户 UID/GID、交互式终端和可选 SSH 挂载。
+实际部署推荐使用 `run.sh`，它会处理交互式终端和可选 SSH 挂载，并使用镜像内已有的非 root 用户运行 Ansible。
 
 ## 注意事项
 
 - 容器不使用 `privileged`，不挂载 Docker Socket，也不会在容器中运行 Docker Daemon。
 - 私钥复制到容器临时文件系统后会设置为 `0600`，容器退出后自动销毁。
-- `docker/.env`、真实 Inventory、离线包内容和 `artifacts/` 都不会进入镜像。
+- `docker/.env`、真实 Inventory、离线包内容和 `ansible/artifacts/` 都不会进入镜像。
 - 如果 Docker 宿主机本身是部署目标，Inventory 中的 `localhost` 指向容器自身，应改用宿主机可访问地址。
-- 修改 `requirements.txt`、`requirements.yml` 或 Dockerfile 后，下次运行会自动重新构建受影响的镜像层。
+- 修改 `ansible/requirements.txt`、`ansible/requirements.yml` 或 Dockerfile 后，下次运行会自动重新构建受影响的镜像层。

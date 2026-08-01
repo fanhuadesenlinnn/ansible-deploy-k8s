@@ -27,26 +27,32 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+          cache-dependency-path: ansible/requirements-dev.txt
       - name: 安装开发依赖
-        run: pip install -r requirements-dev.txt
+        run: pip install -r ansible/requirements-dev.txt
       - name: 安装 Ansible Collection
-        run: ansible-galaxy collection install -r requirements.yml
+        run: ansible-galaxy collection install -r ansible/requirements.yml
       - name: 检查 YAML 格式
         run: yamllint .
       - name: 检查 Ansible 内容
+        working-directory: ansible
         run: ansible-lint
       - name: 检查敏感信息
         run: bash scripts/check-no-private-data.sh
       - name: 检查集群安装 Playbook 语法
+        working-directory: ansible
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/site.yml --syntax-check
       - name: 检查附加组件 Playbook 语法
+        working-directory: ansible
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/addons.yml --syntax-check
       - name: 检查集群重置 Playbook 语法
+        working-directory: ansible
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/reset.yml --syntax-check
       - name: 检查制品服务器 Playbook 语法
+        working-directory: ansible
         run: ansible-playbook -i inventories/example/hosts.yml playbooks/artifact-server.yml --syntax-check
       - name: 检查 Shell 脚本语法
-        run: bash -n docker/entrypoint.sh docker/run.sh ops.sh ops/*.sh
+        run: bash -n ops.sh ansible/commands.sh docker/entrypoint.sh docker/run.sh offline/*.sh
       - name: 检查 Docker Compose 配置
         run: docker compose -f docker/compose.yml config --quiet
       - name: 构建容器化 Ansible 控制端

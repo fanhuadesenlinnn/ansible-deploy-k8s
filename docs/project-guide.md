@@ -4,11 +4,11 @@
 
 ## 建议阅读顺序
 
-1. `inventories/example/hosts.yml`：理解控制平面、工作节点和全集群主机组。
-2. `inventories/example/group_vars/all.yml`：查看所有可配置变量及默认行为。
-3. `playbooks/site.yml`：了解各部署阶段的调用顺序。
-4. `roles/<名称>/tasks/main.yml`：定位某个阶段的具体任务。
-5. `roles/<名称>/templates/`：查看最终写入目标主机的配置格式。
+1. `ansible/inventories/example/hosts.yml`：理解控制平面、工作节点和全集群主机组。
+2. `ansible/inventories/example/group_vars/all.yml`：查看所有可配置变量及默认行为。
+3. `ansible/playbooks/site.yml`：了解各部署阶段的调用顺序。
+4. `ansible/roles/<名称>/tasks/main.yml`：定位某个阶段的具体任务。
+5. `ansible/roles/<名称>/templates/`：查看最终写入目标主机的配置格式。
 
 环境差异应优先通过 Inventory 变量表达，不要为每个环境复制或直接修改 Role 任务。
 
@@ -16,27 +16,14 @@
 
 | 路径 | 用途 |
 | --- | --- |
-| `ansible.cfg` | 项目级 Ansible 默认设置和 SSH 连接行为。 |
-| `inventories/example/hosts.yml` | 示例主机分组和连接参数。 |
-| `inventories/example/group_vars/all.yml` | 集群的主要配置入口。 |
-| `playbooks/site.yml` | 安装和添加节点的主入口。 |
-| `playbooks/addons.yml` | 独立安装或更新可选组件。 |
-| `playbooks/artifact-server.yml` | 可选安装只读 dufs 离线制品服务。 |
-| `playbooks/reset.yml` | 需要显式确认的集群重置入口。 |
-| `roles/preflight/` | 检查系统、架构、变量和已有节点状态。 |
-| `roles/artifact_bundle/` | 准备和校验离线资源。 |
-| `roles/os_prepare/` | 安装基础工具、关闭 Swap、加载模块并设置 sysctl。 |
-| `roles/container_runtime/` | 安装和配置 containerd 或 CRI-O。 |
-| `roles/crictl/` | 安装 crictl 并配置 CRI Socket。 |
-| `roles/kubernetes_packages/` | 安装和锁定 kubeadm、kubelet、kubectl。 |
-| `roles/control_plane/` | 初始化和扩展控制平面。 |
-| `roles/cni/` | 应用 CNI 清单并等待 CoreDNS。 |
-| `roles/worker/` | 将工作节点加入集群。 |
-| `roles/kubeconfig/` | 将管理员 kubeconfig 导出到控制端。 |
-| `roles/addons/` | 管理可选 Kubernetes 组件。 |
-| `docker/` | 无需在宿主机安装 Python/Ansible 的容器化控制端环境。 |
-| `ops.sh`、`ops/` | 统一操作入口及在线、离线、本机、Docker 调度和离线包制作逻辑。 |
-| `files/offline-bundle/` | 离线包目录结构占位符。 |
+| `ops.sh` | 用户唯一需要记住的操作入口，负责把命令分发到各功能目录。 |
+| `ansible/` | Ansible 配置、依赖、Inventory、Playbook、Role 和命令实现。 |
+| `ansible/ansible.cfg` | 项目级 Ansible 默认设置和 SSH 连接行为。 |
+| `ansible/inventories/example/` | 示例主机分组、连接参数和集群变量。 |
+| `ansible/playbooks/` | 集群安装、附加组件、制品服务和重置入口。 |
+| `ansible/roles/` | 每个部署阶段的具体任务、模板及 Handler。 |
+| `docker/` | 容器化 Ansible 控制端的镜像、Compose 配置和运行脚本。 |
+| `offline/` | 离线包制作、校验、构建容器脚本、目录模板和使用说明。 |
 | `scripts/` | 本地和 CI 共用的检查脚本。 |
 | `.github/` | GitHub Actions 和依赖更新配置。 |
 
@@ -53,7 +40,7 @@
 
 ## 主部署流程
 
-`playbooks/site.yml` 按以下顺序执行：
+`ansible/playbooks/site.yml` 按以下顺序执行：
 
 ```text
 验证 Inventory 和网络 CIDR
@@ -94,6 +81,6 @@ Ansible 的幂等规则检查并收敛到当前配置。
 | `/etc/kubernetes/kubeadm-init.yaml` | 第一台控制平面节点 | 渲染后的 kubeadm 初始化配置。 |
 | `/etc/kubernetes/admin.conf` | 控制平面节点 | 管理员 kubeconfig。 |
 | `/etc/kubernetes/cni-manifest.yaml` | 第一台控制平面节点 | 最终应用的 CNI 清单副本。 |
-| `artifacts/<cluster-name>.conf` | Ansible 控制端 | 导出的管理员 kubeconfig。 |
+| `ansible/artifacts/<cluster-name>.conf` | Ansible 控制端 | 导出的管理员 kubeconfig。 |
 
 每个 Role 的输入、输出和关键判断也写在对应任务文件开头及复杂任务附近。
