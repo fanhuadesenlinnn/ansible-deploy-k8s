@@ -7,6 +7,15 @@
   ansible.builtin.set_fact:
     dufs_arch: "{{ {'x86_64': 'x86_64', 'aarch64': 'aarch64'}[ansible_architecture] }}"
 
+# DynamicUser 不应获取绑定特权端口的 Capability，因此只允许普通用户可监听的端口。
+- name: 验证 dufs 监听端口
+  ansible.builtin.assert:
+    that:
+      - dufs_port | int >= 1024
+      - dufs_port | int <= 65535
+    fail_msg: dufs_port 必须是 1024 到 65535 之间的非特权端口。
+    success_msg: dufs 监听端口有效。
+
 - name: 要求为在线下载的 dufs 配置校验和
   ansible.builtin.assert:
     that:
@@ -48,13 +57,27 @@
 
 - name: 从离线包安装 dufs
   ansible.builtin.copy:
-    src: "{{ offline_remote_dir }}/bin/dufs"
+    src: >-
+      {{ dufs_offline_binary_path
+         if dufs_offline_binary_path | length > 0
+         else offline_remote_dir ~ '/bin/dufs' }}
     dest: /usr/local/bin/dufs
-    remote_src: true
+    remote_src: "{{ dufs_offline_binary_path | length == 0 }}"
     owner: root
     group: root
     mode: "0755"
   when: install_mode == 'offline'
+
+- name: 将离线归档投放到 dufs 共享目录
+  ansible.builtin.copy:
+    src: "{{ dufs_bundle_archive_path }}"
+    dest: "{{ dufs_root }}/{{ dufs_bundle_archive_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - install_mode == 'offline'
+    - dufs_bundle_archive_path | length > 0
 
 - name: 安装 dufs systemd 单元
   ansible.builtin.template:
@@ -71,3 +94,13 @@
     state: started
     enabled: true
     daemon_reload: true
+
+- name: 执行待处理的 dufs Handler
+  ansible.builtin.meta: flush_handlers
+
+- name: 确认 dufs 已经监听配置端口
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ dufs_port }}"
+    state: started
+    timeout: 15

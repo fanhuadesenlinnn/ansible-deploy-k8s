@@ -53,9 +53,20 @@ docker_arguments=(
   compose
   --file "${compose_file}"
   run
-  --build
   --rm
 )
+
+# 完全离线时禁止 Compose 尝试构建或拉取镜像；镜像必须先由 ops.sh offline-load
+# 从离线包导入。在线模式保留自动构建，方便首次使用。
+if [[ ${ANSIBLE_DOCKER_OFFLINE:-false} == true ]]; then
+  if ! docker image inspect ansible-deploy-k8s-ansible:latest >/dev/null 2>&1; then
+    echo "缺少离线 Ansible 控制端镜像，请先运行 ./ops.sh offline-load --bundle <目录>。" >&2
+    exit 1
+  fi
+  docker_arguments+=(--pull never)
+else
+  docker_arguments+=(--build)
+fi
 
 # 非交互环境关闭 TTY；交互终端保留密码、Vault 和 become 提示能力。
 if [[ ! -t 0 || ! -t 1 ]]; then

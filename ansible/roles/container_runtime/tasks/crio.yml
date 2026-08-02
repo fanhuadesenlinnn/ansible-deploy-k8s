@@ -65,13 +65,45 @@
     - install_mode == 'offline'
     - offline_crio_image_archives.matched | default(0) | int > 0
 
-- name: 为 CRI-O 导入离线镜像
+# 先按元数据中的原始镜像引用检查本地存储，只导入缺失项。这样重复执行部署时
+# 不会反复解包全部镜像，也能让 Ansible 的 changed 结果准确反映实际变化。
+- name: 检查 CRI-O 存储中的离线镜像
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ item }}"
+  loop: "{{ offline_bundle_metadata.images }}"
+  register: crio_image_presence
+  changed_when: false
+  failed_when: crio_image_presence.rc not in [0, 1]
+  when: install_mode == 'offline'
+
+- name: 为 CRI-O 导入缺失的离线镜像
   ansible.builtin.command:
     argv:
       - podman
       - load
       - --input
-      - "{{ item.path }}"
-  loop: "{{ offline_crio_image_archives.files | default([]) }}"
-  register: crio_image_import
-  changed_when: "'Loaded image' in crio_image_import.stdout"
+      - >-
+        {{ offline_remote_dir }}/images/{{ item.item
+        | regex_replace('[^A-Za-z0-9._-]', '_') }}.tar
+  loop: "{{ crio_image_presence.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  changed_when: true
+  when:
+    - install_mode == 'offline'
+    - item.rc | int == 1
+
+- name: 确认 CRI-O 存储包含离线包声明的全部镜像
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ item }}"
+  loop: "{{ offline_bundle_metadata.images }}"
+  changed_when: false
+  when: install_mode == 'offline'

@@ -139,7 +139,8 @@ ops_run_ansible() {
   else
     ops_require_docker
     ops_print_command "${OPS_REPO_ROOT}/docker/run.sh" "$@"
-    "${OPS_REPO_ROOT}/docker/run.sh" "$@"
+    ANSIBLE_DOCKER_OFFLINE=${OPS_DOCKER_OFFLINE:-false} \
+      "${OPS_REPO_ROOT}/docker/run.sh" "$@"
   fi
 }
 
@@ -204,6 +205,8 @@ ansible-deploy-k8s 统一操作入口
   deploy             在线或离线安装/扩容 Kubernetes 集群
   offline-build      在联网机器上制作离线资源包
   offline-validate   校验离线资源包结构和 SHA-256
+  offline-load       从离线包载入 Docker 控制端镜像
+  offline-serve      用离线包在首个控制平面启动 dufs 分发
   check              检查所有 Playbook 语法
   ping               检查 Ansible 到所有集群节点的连接
   addons             安装或更新 Inventory 中启用的附加组件
@@ -214,6 +217,7 @@ ansible-deploy-k8s 统一操作入口
   ./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor local --mode online
   ./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor docker --mode online
   ./ops.sh offline-build --distro ubuntu --release 24.04 --arch amd64
+  ./ops.sh offline-load --bundle offline/bundles/<离线包目录>
   ./ops.sh deploy -i ansible/inventories/my-cluster/hosts.yml --executor docker \
     --mode offline --bundle offline/bundles/<离线包目录>
 
@@ -268,6 +272,7 @@ ops_interactive_menu() {
   local inventory
   local executor
   local cluster_name
+  local bundle_path
 
   cat <<'EOF'
 
@@ -282,6 +287,7 @@ ansible-deploy-k8s 操作菜单
   7. Docker 离线部署
   8. 安装或更新附加组件
   9. 重置集群
+  10. 启动离线 dufs 制品服务
   0. 退出
 EOF
 
@@ -314,6 +320,13 @@ EOF
       ops_cmd_reset \
         --inventory "${inventory}" --executor "${executor}" --cluster-name "${cluster_name}"
       ;;
+    10)
+      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
+      executor=$(ops_prompt "执行环境（local/docker）" docker)
+      bundle_path=$(ops_prompt "离线包目录" "")
+      ops_cmd_offline_serve \
+        --inventory "${inventory}" --executor "${executor}" --bundle "${bundle_path}"
+      ;;
     0) exit 0 ;;
     *) ops_die "无效的菜单选项：${selection}" ;;
   esac
@@ -330,6 +343,8 @@ case "${ops_command}" in
   deploy) ops_cmd_deploy "$@" ;;
   offline-build) ops_cmd_offline_build "$@" ;;
   offline-validate) ops_cmd_offline_validate "$@" ;;
+  offline-load) ops_cmd_offline_load "$@" ;;
+  offline-serve) ops_cmd_offline_serve "$@" ;;
   check) ops_cmd_check "$@" ;;
   ping) ops_cmd_ping "$@" ;;
   addons) ops_cmd_addons "$@" ;;

@@ -4,6 +4,8 @@ name: ansible-deploy-k8s
 
 services:
   ansible:
+    # 固定运行时镜像名。offline-load 会把离线包中的镜像加载为这个标签。
+    image: ansible-deploy-k8s-ansible:latest
     build:
       # 构建上下文必须是仓库根目录，Dockerfile 才能读取 ansible/ 中的依赖定义。
       context: ..

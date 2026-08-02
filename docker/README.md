@@ -105,15 +105,24 @@ $EDITOR ansible/inventories/my-cluster/group_vars/all.yml
 
 ## 离线安装路径
 
-Playbook 中的文件路径按容器内路径解释。仓库根目录映射为 `/workspace`，因此仓库内离线包应配置为：
+完整离线包中包含当前控制机架构的 Ansible 镜像。在断网机器上可以显式载入：
+
+```bash
+./ops.sh offline-load --bundle offline/bundles/<离线包目录>
+```
+
+使用 `ops.sh deploy --executor docker --mode offline --bundle ...` 时会自动载入。此时 `run.sh` 不运行 Docker
+构建，并向 Compose 传入 `--pull never`；缺少本地镜像会直接失败，不会访问镜像仓库。
+
+Playbook 中的文件路径按容器内路径解释。仓库根目录映射为 `/workspace`，因此仓库内离线包对应：
 
 ```yaml
 install_mode: offline
 offline_bundle_path: /workspace/offline/bundles/<离线包目录>
 ```
 
-仓库外的离线包不会自动挂载。可以把它放入项目忽略的 `offline/bundles/`，或者在 `compose.yml` 中增加
-一条只读挂载并使用对应的容器路径。
+仓库外的离线包不会自动挂载。推荐将离线介质内容复制到项目忽略的 `offline/bundles/`，再通过根目录的
+`ops.sh` 调用；完整流程参阅[离线安装说明](../offline/README.md)。
 
 ## 直接使用 Compose
 

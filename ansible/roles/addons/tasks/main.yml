@@ -1,6 +1,6 @@
 ---
 # 附加组件 Role：读取 addons 字典，只处理值为 true 的组件。
-# 在线模式下载带校验和的清单，离线模式读取 manifests/<组件名>.yaml，然后使用 Server-Side Apply。
+# 在线模式下载带校验和的清单，离线模式读取 manifests/addons/<组件名>.yaml，然后使用 Server-Side Apply。
 # 它独立于主安装流程，适合在集群建成后单独运行 playbooks/addons.yml。
 
 - name: 生成已启用的附加组件列表
@@ -43,7 +43,7 @@
 
 - name: 从离线包复制已启用的附加组件清单
   ansible.builtin.copy:
-    src: "{{ offline_remote_dir }}/manifests/{{ item }}.yaml"
+    src: "{{ offline_remote_dir }}/manifests/addons/{{ item }}.yaml"
     dest: "/etc/kubernetes/addons/{{ item }}.yaml"
     remote_src: true
     owner: root

@@ -1,16 +1,12 @@
 ---
-# 离线资源准备 Role：仅在 install_mode=offline 时执行实际工作。
-# 支持两种来源：从 Ansible 控制端复制目录，或由每台目标主机下载同一个 HTTP tar.gz 归档。
-# 最终输出统一位于 offline_remote_dir，后续 Role 不需要关心资源采用哪种传输方式。
+# 离线资源准备 Role：把目录或 HTTP 归档统一放到 offline_remote_dir，并在安装前
+# 验证包格式、全部文件校验和及目标环境兼容性。离线包不完整时在修改系统前失败。
 
-# path 与 url 必须二选一；HTTP 内容还必须使用校验和固定，避免节点下载到不同版本。
 - name: 验证离线包来源
   ansible.builtin.assert:
     that:
       - (offline_bundle_path | length > 0) != (offline_bundle_url | length > 0)
-      - >-
-        offline_bundle_url | length == 0 or
-        offline_bundle_checksum | default('') | length > 0
+      - offline_bundle_url | length == 0 or offline_bundle_checksum | default('') | length > 0
     fail_msg: >-
       离线模式下必须且只能设置 offline_bundle_path 或 offline_bundle_url 其中之一；
       使用 HTTP 归档时还必须设置 offline_bundle_checksum。
@@ -41,17 +37,18 @@
   ansible.builtin.get_url:
     url: "{{ offline_bundle_url }}"
     dest: /tmp/ansible-install-k8s-offline-bundle.tar.gz
-    checksum: "{{ offline_bundle_checksum | default(omit, true) }}"
+    checksum: "{{ offline_bundle_checksum }}"
     owner: root
     group: root
     mode: "0644"
+  # URL 可以是隔离网络内的 dufs/Nginx；不要求、也不会访问公共软件源。
   environment: "{{ proxy_env }}"
   register: offline_bundle_download
   when:
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
 
-# 只有下载内容发生变化时才清空子目录，防止新旧归档文件混合后通过完整性检查。
+# 归档发生变化时先删除旧版本的已知内容，避免新旧 deb 或镜像混装。
 - name: 在解压已变更的归档前删除旧内容
   ansible.builtin.file:
     path: "{{ offline_remote_dir }}/{{ item }}"
@@ -61,6 +58,9 @@
     - images
     - manifests
     - bin
+    - controller
+    - metadata.yml
+    - SHA256SUMS
   when:
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
@@ -75,6 +75,55 @@
   when:
     - install_mode == 'offline'
     - offline_bundle_url | length > 0
+
+- name: 读取离线包元数据
+  ansible.builtin.slurp:
+    src: "{{ offline_remote_dir }}/metadata.yml"
+  register: offline_bundle_metadata_file
+  when: install_mode == 'offline'
+
+- name: 解析离线包元数据
+  ansible.builtin.set_fact:
+    offline_bundle_metadata: "{{ offline_bundle_metadata_file.content | b64decode | from_yaml }}"
+    offline_target_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
+    offline_enabled_addons: >-
+      {{ addons | dict2items | selectattr('value', 'equalto', true)
+         | map(attribute='key') | list }}
+  when: install_mode == 'offline'
+
+- name: 验证离线包版本和目标环境兼容性
+  ansible.builtin.assert:
+    that:
+      - offline_bundle_metadata.format_version | string == '2'
+      - offline_bundle_metadata.complete_bundle | bool
+      - offline_bundle_metadata.target_distro == ansible_distribution | lower
+      - >-
+        offline_bundle_metadata.target_release in
+        [ansible_distribution_version, ansible_distribution_major_version]
+      - offline_bundle_metadata.target_arch == offline_target_arch
+      - offline_bundle_metadata.kubernetes_version == kubernetes_version
+      - offline_bundle_metadata.kubernetes_package_version == kubernetes_package_version
+      - offline_bundle_metadata.container_runtime == container_runtime
+      - offline_bundle_metadata.crictl_version == crictl_version
+      - offline_bundle_metadata.cni_plugin == cni_plugin
+      - offline_bundle_metadata.cni_manifest == offline_cni_manifest
+      - offline_enabled_addons | difference(offline_bundle_metadata.addons | default([])) | length == 0
+    fail_msg: >-
+      离线包与当前节点或 Inventory 不匹配。请核对系统发行版/版本/架构、Kubernetes、
+      容器运行时、crictl、CNI 和已启用附加组件后重新制作离线包。
+    success_msg: 离线包与目标环境兼容。
+  when: install_mode == 'offline'
+
+- name: 验证离线包全部文件的 SHA-256
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - --check
+      - SHA256SUMS
+  args:
+    chdir: "{{ offline_remote_dir }}"
+  changed_when: false
+  when: install_mode == 'offline'
 
 - name: 检查离线 Debian 软件包
   ansible.builtin.find:
@@ -98,57 +147,63 @@
   register: offline_bundle_cni_manifest
   when: install_mode == 'offline'
 
-- name: 检查离线 crictl 二进制文件
+- name: 检查离线节点工具
   ansible.builtin.stat:
-    path: "{{ offline_remote_dir }}/bin/crictl"
-  register: offline_bundle_crictl
-  when:
-    - install_mode == 'offline'
-    - install_crictl | bool
+    path: "{{ offline_remote_dir }}/bin/{{ item }}"
+  loop:
+    - crictl
+    - dufs
+  register: offline_bundle_binaries
+  when: install_mode == 'offline'
 
-# 在任何 apt 安装或镜像导入前一次性检查关键文件，使缺失资源尽早失败。
-- name: 确认离线包内容完整
+- name: 检查已启用附加组件的离线清单
+  ansible.builtin.stat:
+    path: "{{ offline_remote_dir }}/manifests/addons/{{ item }}.yaml"
+  loop: "{{ offline_enabled_addons }}"
+  register: offline_bundle_addon_manifests
+  when: install_mode == 'offline'
+
+- name: 确认离线包关键内容完整
   ansible.builtin.assert:
     that:
       - offline_deb_packages.matched | int > 0
+      - offline_deb_packages.matched | int == offline_bundle_metadata.package_count | int
       - >-
-        offline_deb_packages.files
-        | map(attribute='path')
-        | map('basename')
-        | select('match', '^kubeadm_.*\.deb$')
-        | list
-        | length > 0
+        offline_deb_packages.files | map(attribute='path') | map('basename')
+        | select('match', '^kubeadm_.*\.deb$') | list | length > 0
       - >-
-        offline_deb_packages.files
-        | map(attribute='path')
-        | map('basename')
-        | select('match', '^kubelet_.*\.deb$')
-        | list
-        | length > 0
+        offline_deb_packages.files | map(attribute='path') | map('basename')
+        | select('match', '^kubelet_.*\.deb$') | list | length > 0
       - >-
-        offline_deb_packages.files
-        | map(attribute='path')
-        | map('basename')
-        | select('match', '^kubectl_.*\.deb$')
-        | list
-        | length > 0
+        offline_deb_packages.files | map(attribute='path') | map('basename')
+        | select('match', '^kubectl_.*\.deb$') | list | length > 0
       - >-
-        offline_deb_packages.files
-        | map(attribute='path')
-        | map('basename')
-        | select('match', '^' ~ (containerd_package if container_runtime == 'containerd' else 'cri-o') ~ '_.*\.deb$')
-        | list
-        | length > 0
-      - offline_bundle_images.matched | int > 0
+        offline_deb_packages.files | map(attribute='path') | map('basename')
+        | select('match', '^' ~ offline_bundle_metadata.container_runtime_package ~ '_.*\.deb$')
+        | list | length > 0
+      - >-
+        container_runtime != 'crio' or
+        (offline_deb_packages.files | map(attribute='path') | map('basename')
+         | select('match', '^podman_.*\.deb$') | list | length > 0)
+      - >-
+        container_runtime != 'crio' or
+        (offline_deb_packages.files | map(attribute='path') | map('basename')
+         | select('match', '^containernetworking-plugins_.*\.deb$') | list | length > 0)
+      - offline_bundle_images.matched | int == offline_bundle_metadata.image_count | int
+      - offline_bundle_metadata.images | length == offline_bundle_metadata.image_count | int
       - offline_bundle_cni_manifest.stat.exists
       - offline_bundle_cni_manifest.stat.isreg
       - >-
         not (install_crictl | bool) or
-        (offline_bundle_crictl.stat.exists | default(false) and
-        offline_bundle_crictl.stat.isreg | default(false))
+        (offline_bundle_binaries.results[0].stat.exists and
+         offline_bundle_binaries.results[0].stat.executable)
+      - offline_bundle_binaries.results[1].stat.exists
+      - offline_bundle_binaries.results[1].stat.executable
+      - >-
+        offline_bundle_addon_manifests.results | default([])
+        | selectattr('stat.exists', 'equalto', true) | list | length
+        == offline_enabled_addons | length
     fail_msg: >-
-      离线包必须在 packages/ 中包含 kubeadm、kubelet、kubectl、所选容器运行时
-      及其全部依赖，至少包含一个 images/*.tar、manifests/ 下配置的 CNI 清单；
-      启用 crictl 时还必须包含 bin/crictl。
-    success_msg: 离线包内容完整。
+      完整离线包缺少 Kubernetes/运行时 deb、镜像、CNI、节点工具或已启用附加组件清单。
+    success_msg: 离线包关键内容完整。
   when: install_mode == 'offline'

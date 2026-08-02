@@ -206,12 +206,11 @@ addons:
 addon_manifests:
   metrics_server: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
   cert_manager: https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
-  reloader: >-
-    https://raw.githubusercontent.com/stakater/Reloader/chart-v2.2.12/deployments/kubernetes/reloader.yaml
+  reloader: https://raw.githubusercontent.com/stakater/Reloader/chart-v2.2.12/deployments/kubernetes/reloader.yaml
   istio: ""
 
 # 每个在线清单的 SHA-256 校验和。URL 或版本变更时必须同步更新。
-# 离线模式不使用这些 URL，而是读取 <offline_remote_dir>/manifests/<组件名>.yaml。
+# 离线模式不使用这些 URL，而是读取 <offline_remote_dir>/manifests/addons/<组件名>.yaml。
 addon_manifest_checksums:
   metrics_server: sha256:1cec29a5267809306a2c6ec74a3e449abbb705b4a8beed0c8a1963910f72c79b
   cert_manager: sha256:5f6a499b8c1857d57f560f536e0dcc830914b45c420899fe7ad0692c8624e408
@@ -224,7 +223,7 @@ addon_manifest_checksums:
 # 这些变量只由 playbooks/artifact-server.yml 使用，site.yml 不依赖 dufs。
 # dufs 会以只读方式共享 dufs_root，默认监听所有网卡的 dufs_port。
 dufs_version: v0.46.0
-dufs_port: 666
+dufs_port: 8080
 dufs_root: "{{ offline_remote_dir }}"
 
 # 在线模式下载 dufs 静态二进制的地址和分架构校验和。

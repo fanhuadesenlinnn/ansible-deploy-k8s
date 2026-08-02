@@ -114,3 +114,27 @@
   loop: "{{ offline_image_archives.files | default([]) }}"
   register: containerd_image_import
   changed_when: "'unpacking' in containerd_image_import.stdout or 'done' in containerd_image_import.stdout"
+
+- name: 读取 containerd 已导入的镜像引用
+  ansible.builtin.command:
+    argv:
+      - ctr
+      - --namespace
+      - k8s.io
+      - images
+      - list
+      - --quiet
+  register: containerd_imported_images
+  changed_when: false
+  when: install_mode == 'offline'
+
+- name: 确认 containerd 包含离线包声明的全部镜像
+  ansible.builtin.assert:
+    that:
+      - >-
+        offline_bundle_metadata.images
+        | difference(containerd_imported_images.stdout_lines | default([]))
+        | length == 0
+    fail_msg: 离线镜像导入不完整，请检查前面的 ctr import 输出。
+    success_msg: containerd 已包含离线包声明的全部镜像。
+  when: install_mode == 'offline'

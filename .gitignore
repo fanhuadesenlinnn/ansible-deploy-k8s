@@ -20,14 +20,20 @@ offline/bundle-template/*
 !offline/bundle-template/images/
 !offline/bundle-template/manifests/
 !offline/bundle-template/bin/
+!offline/bundle-template/controller/
 offline/bundle-template/packages/*
 offline/bundle-template/images/*
 offline/bundle-template/manifests/*
 offline/bundle-template/bin/*
+offline/bundle-template/controller/*
+!offline/bundle-template/manifests/addons/
+offline/bundle-template/manifests/addons/*
 !offline/bundle-template/packages/.gitkeep
 !offline/bundle-template/images/.gitkeep
 !offline/bundle-template/manifests/.gitkeep
 !offline/bundle-template/bin/.gitkeep
+!offline/bundle-template/controller/.gitkeep
+!offline/bundle-template/manifests/addons/.gitkeep
 
 # 只跟踪无敏感信息的 example Inventory；用户复制出的真实环境目录默认忽略。
 ansible/inventories/*

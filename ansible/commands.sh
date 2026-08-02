@@ -180,7 +180,25 @@ ops_execute_playbook() {
   fi
 
   ops_confirm "确认开始${operation_name}？" "${assume_yes}"
+  # 该变量由统一入口 ops.sh 中的 ops_run_ansible 读取。
+  # shellcheck disable=SC2034
+  OPS_DOCKER_OFFLINE=false
+  if [[ ${executor} == docker && ${install_mode} == offline ]]; then
+    if [[ -n ${bundle_path} ]]; then
+      # 目录模式可直接取得包内控制端镜像，因此由部署命令自动导入。
+      ops_offline_load_controller_image "${bundle_path}" true
+    else
+      # URL 只对目标节点可见，控制端镜像必须提前从离线介质导入。
+      ops_require_docker
+      docker image inspect ansible-deploy-k8s-ansible:latest >/dev/null 2>&1 || \
+        ops_die "使用 HTTP 离线包和 Docker 执行器前，请先运行 offline-load 导入控制端镜像。"
+    fi
+    # shellcheck disable=SC2034
+    OPS_DOCKER_OFFLINE=true
+  fi
   ops_run_ansible "${executor}" "${command[@]}"
+  # shellcheck disable=SC2034
+  OPS_DOCKER_OFFLINE=false
 }
 
 ops_cmd_deploy() {

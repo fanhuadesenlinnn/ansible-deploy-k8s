@@ -167,6 +167,10 @@ sudo crictl logs <容器 ID>
   --kubernetes-version 1.36.3
 ```
 
+生成结果同时包含目标节点所需的 deb、crictl、dufs、Kubernetes/CNI/附加组件镜像和清单，以及断网运行
+Docker Ansible 控制端所需的镜像。需要 CRI-O 或附加组件时，在制作命令中加入 `--runtime crio`、
+`--addon <名称>`；部署前会严格检查离线包与 Inventory 是否匹配。
+
 随后使用本机 Ansible 或 Docker 控制端安装：
 
 ```bash
@@ -174,7 +178,7 @@ sudo crictl logs <容器 ID>
   -i ansible/inventories/my-cluster/hosts.yml \
   --executor docker \
   --mode offline \
-  --bundle offline/bundles/k8s-1.36.3-ubuntu-24.04-amd64
+  --bundle offline/bundles/k8s-1.36.3-ubuntu-24.04-amd64-containerd
 ```
 
 离线包也可以由所有节点通过 HTTP 下载。支持范围、目录结构和自定义 CNI 方法请参阅

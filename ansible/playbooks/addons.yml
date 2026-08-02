@@ -4,6 +4,11 @@
 - name: 安装可选的 Kubernetes 附加组件
   hosts: "kube_control_plane[0]"
   become: true
-  gather_facts: false
+  # 离线模式需要系统发行版和架构事实来验证离线包兼容性。
+  gather_facts: true
   roles:
+    - artifact_bundle
+    # 集群建成后追加离线组件时，先把新版离线包中的新增镜像导入节点运行时。
+    - role: container_runtime
+      when: install_mode == 'offline'
     - addons
