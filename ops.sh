@@ -154,25 +154,99 @@ ops_confirm() {
   fi
 
   [[ -t 0 ]] || ops_die "非交互环境必须显式传入 --yes。"
-  read -r -p "${prompt_text} [y/N] " answer
-  case "${answer}" in
-    y|Y|yes|YES) ;;
-    *) ops_die "操作已取消。" ;;
-  esac
+  while true; do
+    read -r -p "${prompt_text} [y/N] " answer || return 1
+    case "${answer}" in
+      y|Y|yes|YES) return 0 ;;
+      ""|n|N|no|NO) return 1 ;;
+      *) ops_warn "请输入 y 或 n。" ;;
+    esac
+  done
 }
 
-ops_prompt() {
+# 文本输入统一支持返回和退出；结果通过 OPS_INTERACTIVE_VALUE 传给调用者。
+ops_interactive_input() {
   local prompt_text=$1
   local default_value=${2:-}
+  local allow_empty=${3:-false}
   local answer
 
-  if [[ -n ${default_value} ]]; then
-    read -r -p "${prompt_text} [${default_value}]：" answer
-    printf '%s\n' "${answer:-${default_value}}"
-  else
-    read -r -p "${prompt_text}：" answer
-    printf '%s\n' "${answer}"
-  fi
+  while true; do
+    if [[ -n ${default_value} ]]; then
+      read -r -p "${prompt_text} [${default_value}]（b 返回主菜单，q 退出）：" answer || return 3
+      answer=${answer:-${default_value}}
+    else
+      read -r -p "${prompt_text}（b 返回主菜单，q 退出）：" answer || return 3
+    fi
+
+    case "${answer}" in
+      b|B) return 2 ;;
+      q|Q) return 3 ;;
+    esac
+    if [[ -n ${answer} || ${allow_empty} == true ]]; then
+      OPS_INTERACTIVE_VALUE=${answer}
+      return 0
+    fi
+    ops_warn "该项不能为空，请重新输入。"
+  done
+}
+
+# 用编号展示固定选项，同时也接受选项的英文值，便于熟悉项目的用户快速输入。
+ops_interactive_select() {
+  local prompt_text=$1
+  local default_value=$2
+  shift 2
+
+  local values=()
+  local labels=()
+  local default_index=""
+  local answer
+  local index
+
+  while [[ $# -gt 0 ]]; do
+    values+=("$1")
+    labels+=("$2")
+    shift 2
+  done
+
+  while true; do
+    printf '\n%s\n' "${prompt_text}"
+    for ((index = 0; index < ${#values[@]}; index++)); do
+      printf '  %s. %s\n' "$((index + 1))" "${labels[index]}"
+      if [[ ${values[index]} == "${default_value}" ]]; then
+        default_index=$((index + 1))
+      fi
+    done
+
+    if [[ -n ${default_index} ]]; then
+      read -r -p "请选择 [${default_index}]（b 返回主菜单，q 退出）：" answer || return 3
+      answer=${answer:-${default_index}}
+    else
+      read -r -p "请选择（b 返回主菜单，q 退出）：" answer || return 3
+    fi
+
+    case "${answer}" in
+      b|B) return 2 ;;
+      q|Q) return 3 ;;
+    esac
+    if [[ ${answer} == y || ${answer} == Y ]]; then
+      answer=yes
+    elif [[ ${answer} == n || ${answer} == N ]]; then
+      answer=no
+    fi
+    if [[ ${answer} =~ ^[0-9]+$ ]] && \
+       ((answer >= 1 && answer <= ${#values[@]})); then
+      OPS_INTERACTIVE_VALUE=${values[answer - 1]}
+      return 0
+    fi
+    for ((index = 0; index < ${#values[@]}; index++)); do
+      if [[ ${answer} == "${values[index]}" ]]; then
+        OPS_INTERACTIVE_VALUE=${values[index]}
+        return 0
+      fi
+    done
+    ops_warn "无效选择，请输入菜单编号。"
+  done
 }
 
 ops_sha256_file() {
@@ -227,109 +301,65 @@ ansible-deploy-k8s 统一操作入口
 EOF
 }
 
-ops_interactive_deploy() {
-  local executor=$1
-  local install_mode=$2
-  local inventory
-  local bundle_path=""
-  local command_args=()
+# 交互向导按功能放在对应目录；ops.sh 只负责提供通用组件和统一菜单。
+# shellcheck source=ansible/menu.sh
+source "${OPS_ANSIBLE_ROOT}/menu.sh"
+# shellcheck source=offline/menu.sh
+source "${OPS_REPO_ROOT}/offline/menu.sh"
 
-  inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
-  command_args=(
-    --inventory "${inventory}"
-    --executor "${executor}"
-    --mode "${install_mode}"
-  )
-
-  if [[ ${install_mode} == offline ]]; then
-    bundle_path=$(ops_prompt "离线包目录（例如 offline/bundles/k8s-1.36.3-ubuntu-24.04-amd64）" "")
-    command_args+=(--bundle "${bundle_path}")
+ops_interactive_pause() {
+  if [[ -t 0 ]]; then
+    read -r -p $'\n按 Enter 返回主菜单……' || true
   fi
-
-  ops_cmd_deploy "${command_args[@]}"
 }
 
-ops_interactive_offline_build() {
-  local distro
-  local release
-  local arch
-  local kubernetes_version
+ops_interactive_run() {
+  local status
 
-  distro=$(ops_prompt "目标系统（ubuntu/debian）" ubuntu)
-  release=$(ops_prompt "目标系统版本" 24.04)
-  arch=$(ops_prompt "目标架构（amd64/arm64）" amd64)
-  kubernetes_version=$(ops_prompt "Kubernetes 版本" "$(ops_inventory_scalar kubernetes_version)")
-
-  ops_cmd_offline_build \
-    --distro "${distro}" \
-    --release "${release}" \
-    --arch "${arch}" \
-    --kubernetes-version "${kubernetes_version}"
+  if ( "$@" ); then
+    status=0
+  else
+    status=$?
+  fi
+  case "${status}" in
+    0) ops_interactive_pause ;;
+    2) ops_info "已返回主菜单。" ;;
+    3) return 3 ;;
+    *) ops_warn "操作未完成，请根据上面的错误信息修正后重试。" ;;
+  esac
+  return 0
 }
 
 ops_interactive_menu() {
   local selection
-  local inventory
-  local executor
-  local cluster_name
-  local bundle_path
 
-  cat <<'EOF'
+  while true; do
+    cat <<'EOF'
 
 ansible-deploy-k8s 操作菜单
 
-  1. 检查 Playbook 语法
-  2. 检查节点 SSH/Ansible 连接
-  3. 本机 Ansible 在线部署
-  4. Docker 在线部署
-  5. 制作离线包
-  6. 本机 Ansible 离线部署
-  7. Docker 离线部署
-  8. 安装或更新附加组件
-  9. 重置集群
-  10. 启动离线 dufs 制品服务
+  1. 部署或扩容 Kubernetes 集群
+  2. 检查环境与节点连接
+  3. 制作、校验或加载离线包
+  4. 安装或更新附加组件
+  5. 启动离线包 HTTP 分发服务（dufs）
+  6. 重置 Kubernetes 集群（危险）
   0. 退出
 EOF
 
-  read -r -p "请选择操作：" selection
-  case "${selection}" in
-    1)
-      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/example/hosts.yml")
-      executor=$(ops_prompt "执行环境（local/docker）" local)
-      ops_cmd_check --inventory "${inventory}" --executor "${executor}"
-      ;;
-    2)
-      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
-      executor=$(ops_prompt "执行环境（local/docker）" local)
-      ops_cmd_ping --inventory "${inventory}" --executor "${executor}"
-      ;;
-    3) ops_interactive_deploy local online ;;
-    4) ops_interactive_deploy docker online ;;
-    5) ops_interactive_offline_build ;;
-    6) ops_interactive_deploy local offline ;;
-    7) ops_interactive_deploy docker offline ;;
-    8)
-      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
-      executor=$(ops_prompt "执行环境（local/docker）" local)
-      ops_cmd_addons --inventory "${inventory}" --executor "${executor}"
-      ;;
-    9)
-      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
-      executor=$(ops_prompt "执行环境（local/docker）" local)
-      cluster_name=$(ops_prompt "必须准确输入 cluster_name" "")
-      ops_cmd_reset \
-        --inventory "${inventory}" --executor "${executor}" --cluster-name "${cluster_name}"
-      ;;
-    10)
-      inventory=$(ops_prompt "Inventory 文件或目录" "ansible/inventories/my-cluster/hosts.yml")
-      executor=$(ops_prompt "执行环境（local/docker）" docker)
-      bundle_path=$(ops_prompt "离线包目录" "")
-      ops_cmd_offline_serve \
-        --inventory "${inventory}" --executor "${executor}" --bundle "${bundle_path}"
-      ;;
-    0) exit 0 ;;
-    *) ops_die "无效的菜单选项：${selection}" ;;
-  esac
+    read -r -p "请选择操作：" selection || return 0
+    case "${selection}" in
+      1) ops_interactive_run ops_interactive_playbook deploy || return 0 ;;
+      2) ops_interactive_run ops_interactive_checks_menu || return 0 ;;
+      3) ops_interactive_run ops_interactive_offline_tools_menu || return 0 ;;
+      4) ops_interactive_run ops_interactive_playbook addons || return 0 ;;
+      5) ops_interactive_run ops_interactive_offline_serve || return 0 ;;
+      6) ops_interactive_run ops_interactive_reset || return 0 ;;
+      0|q|Q) return 0 ;;
+      "") ops_warn "请输入菜单编号。" ;;
+      *) ops_warn "无效的菜单选项：${selection}，请输入 0-6。" ;;
+    esac
+  done
 }
 
 if [[ $# -eq 0 ]]; then

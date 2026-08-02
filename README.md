@@ -51,6 +51,9 @@ Ansible 控制端：
 ./ops.sh
 ```
 
+菜单按照“要完成的任务”组织。进入操作后再选择 Inventory、Docker/本机 Ansible、在线/离线模式和资源来源；
+在任意输入步骤可以使用 `b` 返回主菜单，或使用 `q` 退出。无效输入不会关闭菜单，操作完成或取消后也会返回主菜单。
+
 同一个入口可以组合本机或 Docker 执行环境，以及在线或离线安装模式：
 
 ```bash
@@ -203,6 +206,7 @@ pip install -r ansible/requirements-dev.txt
 ansible-galaxy collection install -r ansible/requirements.yml
 yamllint .
 (cd ansible && ansible-lint)
+bash scripts/test-ops-menu.sh
 ```
 
 安装了 [just](https://github.com/casey/just) 时，也可以运行：

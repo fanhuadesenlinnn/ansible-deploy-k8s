@@ -19,6 +19,25 @@ ops_deploy_usage() {
 EOF
 }
 
+ops_enabled_addons() {
+  local inventory_path=$1
+  local group_vars_file
+
+  group_vars_file="$(dirname -- "${inventory_path}")/group_vars/all.yml"
+
+  [[ -f ${group_vars_file} ]] || return 0
+  awk '
+    $1 == "addons:" {inside = 1; next}
+    inside && $0 !~ /^[[:space:]]/ {exit}
+    inside && $2 == "true" {
+      name = $1
+      sub(/:$/, "", name)
+      values = values (values == "" ? "" : ", ") name
+    }
+    END {print values}
+  ' "${group_vars_file}"
+}
+
 ops_prepare_install_source() {
   local executor=$1
   local install_mode=$2
@@ -166,7 +185,13 @@ ops_execute_playbook() {
   printf '执行环境：%s\n' "${executor}"
   printf '安装模式：%s\n' "${install_mode}"
   printf 'Inventory：%s\n' "${inventory_host_path}"
-  printf '资源来源：%s\n\n' "${OPS_INSTALL_SOURCE_DESCRIPTION}"
+  printf '资源来源：%s\n' "${OPS_INSTALL_SOURCE_DESCRIPTION}"
+  if [[ ${playbook} == playbooks/addons.yml ]]; then
+    local enabled_addons
+    enabled_addons=$(ops_enabled_addons "${inventory_host_path}")
+    printf '已启用附加组件：%s\n' "${enabled_addons:-无（请先在 group_vars/all.yml 中启用）}"
+  fi
+  printf '\n'
 
   if [[ ${executor} == docker ]]; then
     ops_print_command "${OPS_REPO_ROOT}/docker/run.sh" "${command[@]}"
@@ -179,7 +204,10 @@ ops_execute_playbook() {
     return
   fi
 
-  ops_confirm "确认开始${operation_name}？" "${assume_yes}"
+  if ! ops_confirm "确认开始${operation_name}？" "${assume_yes}"; then
+    ops_info "操作已取消，未执行任何修改。"
+    return 0
+  fi
   # 该变量由统一入口 ops.sh 中的 ops_run_ansible 读取。
   # shellcheck disable=SC2034
   OPS_DOCKER_OFFLINE=false
@@ -326,7 +354,10 @@ ops_cmd_reset() {
   printf '执行环境：%s\n' "${executor}"
   printf 'Inventory：%s\n' "${inventory_host_path}"
   printf '确认集群名称：%s\n\n' "${cluster_name}"
-  ops_confirm "确认删除所选节点上的 Kubernetes 和 CNI 状态？" "${assume_yes}"
+  if ! ops_confirm "确认删除所选节点上的 Kubernetes 和 CNI 状态？" "${assume_yes}"; then
+    ops_info "操作已取消，未执行任何修改。"
+    return 0
+  fi
   ops_run_ansible \
     "${executor}" ansible-playbook -i "${inventory_executor_path}" playbooks/reset.yml \
     -e kubernetes_reset_confirm=true -e "kubernetes_reset_cluster_name=${cluster_name}"

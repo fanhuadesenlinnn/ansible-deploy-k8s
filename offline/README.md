@@ -82,6 +82,8 @@ CRI-O 包会同时带上 Podman；部署时通过 `podman load` 将 OCI 归档�
 ./ops.sh offline-build --distro ubuntu --release 24.04 --arch amd64 --plan
 ```
 
+实际制作前会显示完整计划并要求确认；在经过审核的自动化任务中，可以显式加入 `--yes` 跳过确认。
+
 ## 2. 输出与校验
 
 默认结果位于 `offline/bundles/`：

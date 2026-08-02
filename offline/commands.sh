@@ -29,6 +29,7 @@ offline-build 必填参数：
       --addon-spec SPEC          自定义 name|URL|sha256:<摘要>，可重复使用
       --extra-image IMAGE        追加清单无法静态发现的镜像，可重复使用
       --output PATH              输出目录，默认位于 offline/bundles/
+      --yes                      跳过构建前确认
       --plan                     只显示构建参数，不下载资源
   -h, --help                     显示帮助
 
@@ -353,7 +354,7 @@ ops_cmd_offline_serve() {
     -e "dufs_bundle_archive_path=${archive_executor_path}"
     -e "dufs_bundle_archive_name=$(basename -- "${archive_host_path}")"
   )
-  printf '\n操作：启动离线 dufs 制品服务\n'
+  printf '\n操作：启动离线包 HTTP 分发服务（dufs）\n'
   printf '执行环境：%s\nInventory：%s\n归档：%s\nSHA-256：sha256:%s\n\n' \
     "${executor}" "${inventory_host_path}" "${archive_host_path}" "$(ops_sha256_file "${archive_host_path}")"
   ops_print_command "${command[@]}"
@@ -362,7 +363,10 @@ ops_cmd_offline_serve() {
     return
   fi
 
-  ops_confirm "确认在第一台控制平面主机启动 dufs？" "${assume_yes}"
+  if ! ops_confirm "确认在第一台控制平面主机启动离线包 HTTP 分发服务？" "${assume_yes}"; then
+    ops_info "操作已取消，未执行任何修改。"
+    return 0
+  fi
   # 该变量由统一入口 ops.sh 中的 ops_run_ansible 读取。
   # shellcheck disable=SC2034
   OPS_DOCKER_OFFLINE=false
@@ -393,6 +397,7 @@ ops_cmd_offline_build() {
   local cni_manifest_name=""
   local dufs_version
   local output_path=""
+  local assume_yes=false
   local plan_only=false
   local addon_name
   local addon_url
@@ -439,6 +444,7 @@ ops_cmd_offline_build() {
       --addon-spec) ops_require_value "$1" "${2:-}"; addon_specs+=("$2"); addon_spec_count=$((addon_spec_count + 1)); shift 2 ;;
       --extra-image) ops_require_value "$1" "${2:-}"; extra_images+=("$2"); extra_image_count=$((extra_image_count + 1)); shift 2 ;;
       --output) ops_require_value "$1" "${2:-}"; output_path=$2; shift 2 ;;
+      --yes) assume_yes=true; shift ;;
       --plan) plan_only=true; shift ;;
       -h|--help) ops_offline_usage; return ;;
       *) ops_die "未知参数：$1" ;;
@@ -535,6 +541,11 @@ ops_cmd_offline_build() {
   if [[ ${plan_only} == true ]]; then
     ops_info "当前为 --plan，不下载软件包、二进制或镜像。"
     return
+  fi
+
+  if ! ops_confirm "确认开始制作完整离线包？" "${assume_yes}"; then
+    ops_info "操作已取消，未下载资源或创建离线包。"
+    return 0
   fi
 
   ops_require_docker
