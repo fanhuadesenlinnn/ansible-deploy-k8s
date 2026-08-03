@@ -32,10 +32,11 @@ RUN apt-get update \
         --shell /bin/bash \
         "${ANSIBLE_USER}"
 
-# 依赖与项目本机运行方式共用同一份版本约束，避免维护第二套 Ansible 环境定义。
-COPY ansible/requirements.txt ansible/requirements.yml /tmp/ansible-dependencies/
+# 容器同时承担部署和项目检查，因此安装 requirements-dev.txt 中统一约束的
+# Ansible、yamllint 和 ansible-lint；用户只安装 Docker 也能执行完整检查。
+COPY ansible/requirements.txt ansible/requirements-dev.txt ansible/requirements.yml /tmp/ansible-dependencies/
 
-RUN python -m pip install --requirement /tmp/ansible-dependencies/requirements.txt \
+RUN python -m pip install --requirement /tmp/ansible-dependencies/requirements-dev.txt \
     && ansible-galaxy collection install \
         --requirements-file /tmp/ansible-dependencies/requirements.yml \
         --collections-path /usr/share/ansible/collections \

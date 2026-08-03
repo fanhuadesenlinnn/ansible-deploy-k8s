@@ -290,7 +290,12 @@ ops_cmd_check() {
         shift 2
         ;;
       -h|--help)
-        printf '用法：./ops.sh check -i <Inventory> [--executor local|docker]\n'
+        cat <<'EOF'
+用法：./ops.sh check -i <Inventory> [--executor local|docker]
+
+依次执行 YAML、Ansible、敏感信息、Shell 功能测试和全部 Playbook 语法检查。
+local 模式需要先安装 ansible/requirements-dev.txt；docker 模式只需要 Docker。
+EOF
         return
         ;;
       *) ops_die "未知参数：$1" ;;
@@ -301,6 +306,27 @@ ops_cmd_check() {
   inventory_host_path=$(ops_resolve_inventory "${inventory}")
   inventory_executor_path=$(ops_executor_path "${inventory_host_path}" "${executor}")
 
+  if [[ ${executor} == local ]]; then
+    ops_require_command yamllint "请安装 ansible/requirements-dev.txt 中的开发依赖，或改用 --executor docker。"
+    ops_require_command ansible-lint "请安装 ansible/requirements-dev.txt 中的开发依赖，或改用 --executor docker。"
+  fi
+
+  ops_info "检查 YAML 格式。"
+  ops_run_ansible "${executor}" yamllint -c ../.yamllint.yml ..
+
+  ops_info "检查 Ansible 内容。"
+  ops_run_ansible "${executor}" ansible-lint
+
+  ops_info "检查已跟踪文件中的敏感信息。"
+  bash "${OPS_REPO_ROOT}/scripts/check-no-private-data.sh"
+
+  ops_info "测试交互菜单导航。"
+  bash "${OPS_REPO_ROOT}/scripts/test-ops-menu.sh"
+
+  ops_info "测试离线包制作与 Inventory 解耦。"
+  bash "${OPS_REPO_ROOT}/scripts/test-offline-build-independent.sh"
+
+  ops_info "检查全部 Playbook 语法。"
   for playbook in site.yml addons.yml reset.yml artifact-server.yml; do
     ops_run_ansible \
       "${executor}" ansible-playbook -i "${inventory_executor_path}" \

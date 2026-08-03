@@ -210,17 +210,16 @@ Docker Ansible 控制端所需的镜像。需要 CRI-O 或附加组件时，在�
 
 ## 开发检查
 
+本机已经安装开发依赖时，可以直接执行完整检查：
+
 ```bash
 pip install -r ansible/requirements-dev.txt
 ansible-galaxy collection install -r ansible/requirements.yml
-yamllint .
-(cd ansible && ansible-lint)
-bash scripts/test-ops-menu.sh
-bash scripts/test-offline-build-independent.sh
+./ops.sh check -i ansible/inventories/example/hosts.yml --executor local
 ```
 
-安装了 [just](https://github.com/casey/just) 时，也可以运行：
+本机只有 Docker 时不需要安装 Python、Ansible 或检查工具：
 
 ```bash
-just check
+./ops.sh check -i ansible/inventories/example/hosts.yml --executor docker
 ```

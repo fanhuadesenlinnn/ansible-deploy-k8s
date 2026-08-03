@@ -3,6 +3,7 @@
 **
 !ansible/
 !ansible/requirements.txt
+!ansible/requirements-dev.txt
 !ansible/requirements.yml
 !docker/
 !docker/Dockerfile

@@ -140,4 +140,5 @@ docker compose -f docker/compose.yml run --build --rm ansible ansible --version
 - 私钥复制到容器临时文件系统后会设置为 `0600`，容器退出后自动销毁。
 - `docker/.env`、真实 Inventory、离线包内容和 `ansible/artifacts/` 都不会进入镜像。
 - 如果 Docker 宿主机本身是部署目标，Inventory 中的 `localhost` 指向容器自身，应改用宿主机可访问地址。
-- 修改 `ansible/requirements.txt`、`ansible/requirements.yml` 或 Dockerfile 后，下次运行会自动重新构建受影响的镜像层。
+- 修改 `ansible/requirements.txt`、`ansible/requirements-dev.txt`、`ansible/requirements.yml` 或 Dockerfile 后，
+  下次运行会自动重新构建受影响的镜像层。

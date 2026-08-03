@@ -1,5 +1,5 @@
 ---
-# 在 yamllint 默认规则上做少量项目级调整；CI 和 just check 都会读取本文件。
+# 在 yamllint 默认规则上做少量项目级调整；CI 和 ops.sh check 都会读取本文件。
 extends: default
 ignore: |
   .venv/

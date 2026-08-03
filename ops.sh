@@ -281,7 +281,7 @@ ansible-deploy-k8s 统一操作入口
   offline-validate   校验离线资源包结构和 SHA-256
   offline-load       从离线包载入 Docker 控制端镜像
   offline-serve      用离线包在首个控制平面启动 dufs 分发
-  check              检查所有 Playbook 语法
+  check              执行代码质量、脚本测试和 Playbook 语法检查
   ping               检查 Ansible 到所有集群节点的连接
   addons             安装或更新 Inventory 中启用的附加组件
   reset              重置所选 Inventory 中的 Kubernetes 集群
