@@ -3,6 +3,9 @@
 完整离线包让 Ansible 控制端和 Kubernetes 目标节点在部署阶段都不访问公网。制作动作在联网机器完成；生成包固定
 目标系统、架构、Kubernetes、容器运行时、CNI 和附加组件，部署前会逐项核对。
 
+制作过程不读取 Ansible Inventory，不需要节点 IP、SSH 凭据或已经配置好的目标机器。离线包的默认版本、固定下载
+地址和 SHA-256 集中保存在 [`defaults.yml`](defaults.yml)；真实 Inventory 只在安装阶段使用。
+
 离线包包含：
 
 - Kubernetes、containerd 或 CRI-O，以及 CRI-O 模式所需的 Podman 和全部必需 deb 依赖；
@@ -70,7 +73,7 @@ CRI-O 包会同时带上 Podman；部署时通过 `podman load` 将 OCI 归档�
   --addon reloader
 ```
 
-`--addon` 使用示例 Inventory 中固定的 URL 和摘要。内部组件或 Istio 自定义清单可用
+`--addon` 使用 `offline/defaults.yml` 中固定的 URL 和摘要。内部组件或 Istio 自定义清单可用
 `--addon-spec '名称|URL|sha256:<摘要>'`。脚本会提取所有静态清单中的 `image:`；由 Helm 模板、Operator 或脚本
 动态决定、无法从 YAML 直接发现的镜像，必须用可重复的 `--extra-image <完整镜像引用>` 补齐。
 

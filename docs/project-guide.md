@@ -24,6 +24,7 @@
 | `ansible/roles/` | 每个部署阶段的具体任务、模板及 Handler。 |
 | `docker/` | 容器化 Ansible 控制端的镜像、Compose 配置和运行脚本。 |
 | `offline/` | 离线包制作、校验、构建容器脚本、目录模板和使用说明。 |
+| `offline/defaults.yml` | 离线包制作专用的版本、下载地址和校验值；不读取集群 Inventory。 |
 | `scripts/` | 本地和 CI 共用的检查脚本。 |
 | `.github/` | GitHub Actions 和依赖更新配置。 |
 

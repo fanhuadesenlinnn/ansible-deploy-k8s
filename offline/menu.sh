@@ -57,14 +57,19 @@ ops_interactive_offline_build() {
   local list_item
   local list_values=()
   local command_args=()
+  local default_distro
+  local default_runtime
+  local default_cni
+  local available_addons
 
   host_arch=$(ops_normalize_arch "$(uname -m)" 2>/dev/null || printf amd64)
-  ops_interactive_select "选择目标 Linux 发行版" ubuntu ubuntu Ubuntu debian Debian || return $?
+  default_distro=$(ops_offline_default_scalar default_target_distro)
+  ops_interactive_select "选择目标 Linux 发行版" "${default_distro}" ubuntu Ubuntu debian Debian || return $?
   distro=${OPS_INTERACTIVE_VALUE}
   if [[ ${distro} == ubuntu ]]; then
-    release=24.04
+    release=$(ops_offline_default_scalar default_ubuntu_release)
   else
-    release=12
+    release=$(ops_offline_default_scalar default_debian_release)
   fi
   ops_interactive_input "目标系统版本" "${release}" false || return $?
   release=${OPS_INTERACTIVE_VALUE}
@@ -72,17 +77,19 @@ ops_interactive_offline_build() {
     "选择目标 Kubernetes 节点架构" "${host_arch}" \
     amd64 "amd64 / x86_64" arm64 "arm64 / aarch64" || return $?
   target_arch=${OPS_INTERACTIVE_VALUE}
-  ops_interactive_input "Kubernetes 完整版本" "$(ops_inventory_scalar kubernetes_version)" false || return $?
+  ops_interactive_input "Kubernetes 完整版本" "$(ops_offline_default_scalar kubernetes_version)" false || return $?
   kubernetes_version=${OPS_INTERACTIVE_VALUE}
+  default_runtime=$(ops_offline_default_scalar default_runtime)
   ops_interactive_select \
-    "选择目标节点容器运行时" containerd \
+    "选择目标节点容器运行时" "${default_runtime}" \
     containerd "containerd（默认，适用范围广）" \
     crio "CRI-O" || return $?
   runtime=${OPS_INTERACTIVE_VALUE}
 
+  default_cni=$(ops_offline_default_scalar default_cni)
   ops_interactive_select \
-    "选择 CNI 清单" flannel \
-    flannel "Flannel（项目内置下载地址与校验值）" \
+    "选择 CNI 清单" "${default_cni}" \
+    "${default_cni}" "${default_cni}（offline/defaults.yml 预设清单）" \
     custom "Calico、Cilium 或其他自定义 CNI" || return $?
   cni_choice=${OPS_INTERACTIVE_VALUE}
 
@@ -119,8 +126,10 @@ ops_interactive_offline_build() {
     command_args+=(--cni-manifest-name "${cni_name}")
   fi
 
+  available_addons=$(ops_offline_default_mapping_keys addon_manifests | \
+    awk 'BEGIN {separator = ""} {printf "%s%s", separator, $0; separator = ","} END {print ""}')
   ops_interactive_input \
-    "需要打包的附加组件（metrics_server,cert_manager,reloader；留空表示不打包）" "" true || return $?
+    "需要打包的附加组件（可选：${available_addons:-无预设}；留空表示不打包）" "" true || return $?
   addons=${OPS_INTERACTIVE_VALUE//,/ }
   if [[ -n ${addons} ]]; then
     read -r -a list_values <<< "${addons}"
@@ -141,14 +150,10 @@ ops_interactive_offline_build() {
     kubernetes_package_version="${kubernetes_version}-1.1"
     ops_interactive_input "Kubernetes deb 软件包版本" "${kubernetes_package_version}" false || return $?
     kubernetes_package_version=${OPS_INTERACTIVE_VALUE}
-    crictl_version=$(ops_inventory_scalar crictl_version)
+    crictl_version=$(ops_offline_default_scalar crictl_version)
     ops_interactive_input "crictl 版本" "${crictl_version}" false || return $?
     crictl_version=${OPS_INTERACTIVE_VALUE}
-    if [[ ${runtime} == containerd ]]; then
-      runtime_package=containerd
-    else
-      runtime_package=cri-o
-    fi
+    runtime_package=$(ops_offline_default_mapping_scalar runtime_packages "${runtime}")
     ops_interactive_input "容器运行时软件包名称" "${runtime_package}" false || return $?
     runtime_package=${OPS_INTERACTIVE_VALUE}
     ops_interactive_input "自定义附加组件（name|URL|sha256:摘要，多个用逗号分隔；可留空）" "" true || return $?

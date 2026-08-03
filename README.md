@@ -36,6 +36,12 @@ Ansible 控制端：
 - Ansible Core 2.16+
 - 能够通过 SSH 访问所有目标主机
 
+只制作离线包的联网机器：
+
+- Docker 和 Docker Compose 插件
+- 能够访问软件源、GitHub 和容器镜像仓库
+- 不需要安装 Ansible，不需要 Inventory，也不需要连接目标节点
+
 目标主机：
 
 - 支持的 Ubuntu 或 Debian 版本
@@ -170,6 +176,9 @@ sudo crictl logs <容器 ID>
   --kubernetes-version 1.36.3
 ```
 
+制作离线包不读取集群 Inventory，也不需要目标节点已经配置或在线；制作参数的默认值位于
+[`offline/defaults.yml`](offline/defaults.yml)。Inventory 只在后续安装和兼容性检查阶段使用。
+
 生成结果同时包含目标节点所需的 deb、crictl、dufs、Kubernetes/CNI/附加组件镜像和清单，以及断网运行
 Docker Ansible 控制端所需的镜像。需要 CRI-O 或附加组件时，在制作命令中加入 `--runtime crio`、
 `--addon <名称>`；部署前会严格检查离线包与 Inventory 是否匹配。
@@ -207,6 +216,7 @@ ansible-galaxy collection install -r ansible/requirements.yml
 yamllint .
 (cd ansible && ansible-lint)
 bash scripts/test-ops-menu.sh
+bash scripts/test-offline-build-independent.sh
 ```
 
 安装了 [just](https://github.com/casey/just) 时，也可以运行：

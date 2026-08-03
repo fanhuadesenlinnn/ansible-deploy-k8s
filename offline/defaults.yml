@@ -1,0 +1,46 @@
+---
+# 离线包制作的独立默认配置。
+#
+# 本文件只描述“要制作什么离线包”，不包含节点 IP、SSH 用户、控制平面数量等集群信息。
+# 制作机器不需要存在 ansible/inventories/，也不需要能够连接任何 Kubernetes 节点。
+
+# 菜单首次打开时使用的目标系统；命令行仍可通过参数覆盖。
+default_target_distro: ubuntu
+default_ubuntu_release: "24.04"
+default_debian_release: "12"
+
+# 离线包中的默认软件版本。修改版本时应同步更新相应下载地址和 SHA-256。
+kubernetes_version: "1.36.3"
+crictl_version: v1.36.0
+dufs_version: v0.46.0
+
+# 默认运行时及各运行时在 Debian/Ubuntu 中的软件包名称。
+default_runtime: containerd
+runtime_packages:
+  containerd: containerd
+  crio: cri-o
+
+# 默认 CNI 及其最终静态清单。可以在这里增加企业内部维护的固定清单；
+# 临时使用其他 CNI 时，也可以通过 --cni-manifest-url 或 --cni-manifest-file 传入。
+default_cni: flannel
+cni_manifest_urls:
+  flannel: https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
+cni_manifest_checksums:
+  flannel: sha256:4148e659a834b51fc9aadc429281c6e80c97e0e25475faacd4cc857dbd16f21b
+cni_manifest_names:
+  flannel: kube-flannel.yml
+
+# `--addon <名称>` 可直接引用的附加组件。自定义组件使用 --addon-spec。
+addon_manifests:
+  metrics_server: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
+  cert_manager: https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
+  reloader: https://raw.githubusercontent.com/stakater/Reloader/chart-v2.2.12/deployments/kubernetes/reloader.yaml
+addon_manifest_checksums:
+  metrics_server: sha256:1cec29a5267809306a2c6ec74a3e449abbb705b4a8beed0c8a1963910f72c79b
+  cert_manager: sha256:5f6a499b8c1857d57f560f536e0dcc830914b45c420899fe7ad0692c8624e408
+  reloader: sha256:d3f8faee2f4a9275a7958d76205115a111b441c47f6cc31abd749fc4c31e6a53
+
+# dufs 静态二进制按目标节点架构选择。
+dufs_checksums:
+  x86_64: sha256:817769f726613194bcff9d0e3e481eaccc86ac11208857614f36a8c02f410977
+  aarch64: sha256:1472123ae3aa07e49404d16b20305c2dec90c59883ebda9308717f7205e6511b

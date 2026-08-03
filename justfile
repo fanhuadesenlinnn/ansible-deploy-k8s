@@ -21,11 +21,16 @@ check:
     cd ansible && ansible-lint
     bash scripts/check-no-private-data.sh
     bash scripts/test-ops-menu.sh
+    bash scripts/test-offline-build-independent.sh
     ./ops.sh check -i {{inventory}} --executor {{executor}}
 
 # 验证交互菜单的导航、返回、退出和错误恢复；不会连接或修改目标节点。
 test-menu:
     bash scripts/test-ops-menu.sh
+
+# 验证制作离线包不读取或依赖任何集群 Inventory。
+test-offline-independent:
+    bash scripts/test-offline-build-independent.sh
 
 # 验证 Ansible 能否通过 SSH 和 Python 连接所有 Kubernetes 主机。
 ping:

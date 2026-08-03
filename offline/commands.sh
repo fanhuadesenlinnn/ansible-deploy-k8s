@@ -15,17 +15,17 @@ offline-build 必填参数：
       --arch ARCH                目标节点架构：amd64 或 arm64
 
 常用选项：
-      --kubernetes-version VER   默认读取示例 Inventory
-      --runtime TYPE             containerd 或 crio，默认 containerd
-      --runtime-package NAME     默认随运行时选择 containerd 或 cri-o
-      --crictl-version VER       默认读取示例 Inventory
+      --kubernetes-version VER   默认读取 offline/defaults.yml
+      --runtime TYPE             containerd 或 crio，默认读取 offline/defaults.yml
+      --runtime-package NAME     默认读取 offline/defaults.yml 中的运行时映射
+      --crictl-version VER       默认读取 offline/defaults.yml
       --controller-arch ARCH     Docker 控制端架构，默认按制作机推断
-      --cni NAME                 默认 flannel
+      --cni NAME                 默认读取 offline/defaults.yml
       --cni-manifest-url URL     CNI 最终静态清单 URL
       --cni-manifest-file PATH   CNI 最终静态清单本地文件
       --cni-manifest-checksum S  URL 必填；本地文件留空时自动计算
       --cni-manifest-name NAME   离线包内的清单文件名
-      --addon NAME               打包示例配置中的附加组件，可重复使用
+      --addon NAME               打包 offline/defaults.yml 中的附加组件，可重复使用
       --addon-spec SPEC          自定义 name|URL|sha256:<摘要>，可重复使用
       --extra-image IMAGE        追加清单无法静态发现的镜像，可重复使用
       --output PATH              输出目录，默认位于 offline/bundles/
@@ -38,19 +38,30 @@ offline-serve 将包内 dufs 和 tar.gz 归档投放到第一台控制平面主�
 EOF
 }
 
-ops_inventory_scalar() {
-  local variable_name=$1
-  local inventory_file="${OPS_ANSIBLE_ROOT}/inventories/example/group_vars/all.yml"
+OPS_OFFLINE_DEFAULTS_FILE=${OPS_OFFLINE_DEFAULTS_FILE:-${OPS_REPO_ROOT}/offline/defaults.yml}
 
-  awk -v target="${variable_name}:" \
-    '$1 == target {gsub(/"/, "", $2); gsub(/\047/, "", $2); print $2; exit}' "${inventory_file}"
+ops_offline_require_defaults() {
+  [[ -f ${OPS_OFFLINE_DEFAULTS_FILE} ]] || \
+    ops_die "离线包默认配置不存在：${OPS_OFFLINE_DEFAULTS_FILE}"
 }
 
-ops_inventory_mapping_scalar() {
+ops_offline_default_scalar() {
+  local variable_name=$1
+  local value
+
+  ops_offline_require_defaults
+  value=$(awk -v target="${variable_name}:" \
+    '$1 == target {value = $2; gsub(/^"|"$/, "", value); gsub(/^\047|\047$/, "", value); print value; exit}' \
+    "${OPS_OFFLINE_DEFAULTS_FILE}")
+  [[ -n ${value} ]] || ops_die "offline/defaults.yml 缺少配置：${variable_name}"
+  printf '%s\n' "${value}"
+}
+
+ops_offline_default_mapping_scalar() {
   local mapping_name=$1
   local mapping_key=$2
-  local inventory_file="${OPS_ANSIBLE_ROOT}/inventories/example/group_vars/all.yml"
 
+  ops_offline_require_defaults
   awk -v section="${mapping_name}:" -v target="${mapping_key}:" '
     $1 == section {inside = 1; next}
     inside && $0 !~ /^[[:space:]]/ {exit}
@@ -61,7 +72,22 @@ ops_inventory_mapping_scalar() {
       print value
       exit
     }
-  ' "${inventory_file}"
+  ' "${OPS_OFFLINE_DEFAULTS_FILE}"
+}
+
+ops_offline_default_mapping_keys() {
+  local mapping_name=$1
+
+  ops_offline_require_defaults
+  awk -v section="${mapping_name}:" '
+    $1 == section {inside = 1; next}
+    inside && $0 !~ /^[[:space:]]/ {exit}
+    inside {
+      key = $1
+      sub(/:$/, "", key)
+      print key
+    }
+  ' "${OPS_OFFLINE_DEFAULTS_FILE}"
 }
 
 ops_offline_metadata_scalar() {
@@ -387,10 +413,10 @@ ops_cmd_offline_build() {
   local controller_arch=""
   local kubernetes_version
   local kubernetes_package_version=""
-  local runtime=containerd
+  local runtime
   local runtime_package=""
   local crictl_version
-  local cni_plugin=flannel
+  local cni_plugin
   local cni_manifest_url=""
   local cni_manifest_file=""
   local cni_manifest_checksum=""
@@ -420,9 +446,11 @@ ops_cmd_offline_build() {
   local addon_names=()
   local addon_specs=()
 
-  kubernetes_version=$(ops_inventory_scalar kubernetes_version)
-  crictl_version=$(ops_inventory_scalar crictl_version)
-  dufs_version=$(ops_inventory_scalar dufs_version)
+  kubernetes_version=$(ops_offline_default_scalar kubernetes_version)
+  crictl_version=$(ops_offline_default_scalar crictl_version)
+  dufs_version=$(ops_offline_default_scalar dufs_version)
+  runtime=$(ops_offline_default_scalar default_runtime)
+  cni_plugin=$(ops_offline_default_scalar default_cni)
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -459,7 +487,8 @@ ops_cmd_offline_build() {
   [[ ${crictl_version} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
     ops_die "crictl 版本格式不正确，例如 v1.36.0。"
   case "${runtime}" in containerd|crio) ;; *) ops_die "--runtime 只能是 containerd 或 crio。" ;; esac
-  runtime_package=${runtime_package:-$(if [[ ${runtime} == containerd ]]; then printf containerd; else printf cri-o; fi)}
+  runtime_package=${runtime_package:-$(ops_offline_default_mapping_scalar runtime_packages "${runtime}")}
+  [[ -n ${runtime_package} ]] || ops_die "offline/defaults.yml 缺少 ${runtime} 的软件包名称。"
   [[ ${runtime_package} =~ ^[a-zA-Z0-9.+-]+$ ]] || ops_die "容器运行时软件包名称格式不正确。"
   [[ ${cni_plugin} =~ ^[a-zA-Z0-9._-]+$ ]] || ops_die "CNI 名称格式不正确。"
 
@@ -468,10 +497,10 @@ ops_cmd_offline_build() {
   case "${controller_arch}" in amd64|arm64) ;; *) ops_die "--controller-arch 只能是 amd64 或 arm64。" ;; esac
   kubernetes_package_version=${kubernetes_package_version:-${kubernetes_version}-1.1}
 
-  if [[ ${cni_plugin} == flannel && -z ${cni_manifest_url} && -z ${cni_manifest_file} ]]; then
-    cni_manifest_url=https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
-    cni_manifest_checksum=sha256:4148e659a834b51fc9aadc429281c6e80c97e0e25475faacd4cc857dbd16f21b
-    cni_manifest_name=kube-flannel.yml
+  if [[ -z ${cni_manifest_url} && -z ${cni_manifest_file} ]]; then
+    cni_manifest_url=$(ops_offline_default_mapping_scalar cni_manifest_urls "${cni_plugin}")
+    cni_manifest_checksum=$(ops_offline_default_mapping_scalar cni_manifest_checksums "${cni_plugin}")
+    cni_manifest_name=$(ops_offline_default_mapping_scalar cni_manifest_names "${cni_plugin}")
   fi
   [[ -z ${cni_manifest_url} || -z ${cni_manifest_file} ]] || \
     ops_die "--cni-manifest-url 与 --cni-manifest-file 只能使用一个。"
@@ -493,11 +522,11 @@ ops_cmd_offline_build() {
   if [[ ${addon_name_count} -gt 0 ]]; then
     for addon_name in "${addon_names[@]}"; do
       [[ ${addon_name} =~ ^[a-zA-Z0-9._-]+$ ]] || ops_die "附加组件名称格式不正确：${addon_name}"
-      addon_url=$(ops_inventory_mapping_scalar addon_manifests "${addon_name}")
-      addon_checksum=$(ops_inventory_mapping_scalar addon_manifest_checksums "${addon_name}")
-      [[ ${addon_url} =~ ^https?:// ]] || ops_die "示例 Inventory 未提供 ${addon_name} 的单行 URL。"
+      addon_url=$(ops_offline_default_mapping_scalar addon_manifests "${addon_name}")
+      addon_checksum=$(ops_offline_default_mapping_scalar addon_manifest_checksums "${addon_name}")
+      [[ ${addon_url} =~ ^https?:// ]] || ops_die "offline/defaults.yml 未提供 ${addon_name} 的单行 URL。"
       [[ ${addon_checksum} =~ ^sha256:[0-9a-fA-F]{64}$ ]] || \
-        ops_die "示例 Inventory 未提供 ${addon_name} 的有效 SHA-256。"
+        ops_die "offline/defaults.yml 未提供 ${addon_name} 的有效 SHA-256。"
       addon_specs+=("${addon_name}|${addon_url}|${addon_checksum}")
       addon_spec_count=$((addon_spec_count + 1))
     done
@@ -512,8 +541,9 @@ ops_cmd_offline_build() {
   fi
 
   case "${target_arch}" in amd64) dufs_arch=x86_64 ;; arm64) dufs_arch=aarch64 ;; esac
-  dufs_checksum=$(ops_inventory_mapping_scalar dufs_checksums "${dufs_arch}")
-  [[ ${dufs_checksum} =~ ^sha256:[0-9a-fA-F]{64}$ ]] || ops_die "示例 Inventory 缺少 dufs 校验和。"
+  dufs_checksum=$(ops_offline_default_mapping_scalar dufs_checksums "${dufs_arch}")
+  [[ ${dufs_checksum} =~ ^sha256:[0-9a-fA-F]{64}$ ]] || \
+    ops_die "offline/defaults.yml 缺少 ${dufs_arch} 的 dufs 校验和。"
   dufs_download_url="https://github.com/sigoden/dufs/releases/download/${dufs_version}/dufs-${dufs_version}-${dufs_arch}-unknown-linux-musl.tar.gz"
 
   output_path=${output_path:-${OPS_REPO_ROOT}/offline/bundles/k8s-${kubernetes_version}-${target_distro}-${target_release}-${target_arch}-${runtime}}
